@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"strings"
 	"sync"
 )
 
@@ -52,9 +53,13 @@ type SimpleDAGWorkflowTransit struct {
 	// isRunning indicates that the worker is working.
 	isRunning bool
 
-	// mu indicates that the channelInputs, channelOutputs and worker are being accessed.
+	// isBuildingMutex indicates that the channelInputs, channelOutputs and worker are being accessed.
 	// It doesn't seem to be useful.
-	// mu sync.RWMutex
+	// isBuildingMutex sync.RWMutex
+}
+
+func NewSimpleDAGWorkflowTransit(name string, inputs []string, outputs []string, worker func(...any) (any, error)) *SimpleDAGWorkflowTransit {
+	return &SimpleDAGWorkflowTransit{name: name, channelInputs: inputs, channelOutputs: outputs, worker: worker}
 }
 
 type SimpleDAGInitInterface interface {
@@ -141,8 +146,8 @@ type SimpleDAGChannel struct {
 	channelInput string
 	// channelOutput defines the channel used for output. Currently only a single output channel is supported.
 	channelOutput string
-	// mu indicates that the channels field is being accessed.
-	mu sync.RWMutex
+	// isBuildingMutex indicates that the channels field is being built.
+	isBuildingMutex sync.RWMutex
 }
 
 func NewSimpleDAGChannel() *SimpleDAGChannel {
@@ -171,8 +176,11 @@ func (e *ErrDAGChannelNameExisted) Error() string {
 }
 
 func (d *SimpleDAGChannel) Add(names ...string) error {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	d.isBuildingMutex.Lock()
+	defer d.isBuildingMutex.Unlock()
+	if d.channels == nil {
+		return ErrChannelNotExist
+	}
 	for _, v := range names {
 		v := v
 		if d.exists(v) {
@@ -188,8 +196,8 @@ func (d *SimpleDAGChannel) Add(names ...string) error {
 }
 
 func (d *SimpleDAGChannel) Exists(name string) bool {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	d.isBuildingMutex.Lock()
+	defer d.isBuildingMutex.Unlock()
 	return d.exists(name)
 }
 
@@ -331,6 +339,11 @@ var ErrChannelInputEmpty = errors.New("the input channel is empty")
 var ErrChannelOutputEmpty = errors.New("the output channel is empty")
 
 func (d *SimpleDAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
+	d.isBuildingMutex.Lock()
+	defer d.isBuildingMutex.Unlock()
+	if d.channels == nil {
+		return ErrChannelNotInitialized
+	}
 	// Build Input
 	if len(d.channelInput) == 0 {
 		return ErrChannelInputEmpty
@@ -365,12 +378,12 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 			case <-ctx.Done(): // If the end notification has been received, it will exit directly without notifying the worker to work.
 				return
 			default:
-				//log.Println("build workflow:", t.name, " selected.")
+				//log.Println("build workflow:", t.channelInputs, " selected.")
 			}
 			var work = func(t *SimpleDAGWorkflowTransit) (any, error) {
 				// It doesn't seem to be useful.
-				// t.mu.Lock()
-				// defer t.mu.Unlock()
+				// t.isBuildingMutex.Lock()
+				// defer t.isBuildingMutex.Unlock()
 				t.isRunning = true
 				defer func(t *SimpleDAGWorkflowTransit) {
 					t.isRunning = false
@@ -381,6 +394,7 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 			if err != nil {
 				d.logger.Printf("worker[%s] error(s) occurred: %s\n", t.name, err.Error())
 				d.SimpleDAGContext.Cancel(err)
+				d.logger.Printf("worker[%s] notified all any other workers to stop.", t.name)
 				return
 			}
 			d.BuildWorkflowInput(ctx, result, t.channelOutputs...)
@@ -390,6 +404,11 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 }
 
 func (d *SimpleDAG[TInput, TOutput]) CloseWorkflow() {
+	d.isBuildingMutex.Lock()
+	defer d.isBuildingMutex.Unlock()
+	if d.channels == nil {
+		return
+	}
 	if len(d.channelInput) == 0 {
 		return
 	}
@@ -401,42 +420,91 @@ func (d *SimpleDAG[TInput, TOutput]) CloseWorkflow() {
 	if len(d.workflowTransits) == 0 {
 		return
 	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	for _, t := range d.workflowTransits {
-		for _, c := range t.channelOutputs {
-			close(d.channels[c])
-		}
-	}
+	//for _, t := range d.workflowTransits {
+	//	for _, c := range t.channelOutputs {
+	//		close(d.channels[c])
+	//	}
+	//}
+	d.channels = nil
 }
 
-func (d *SimpleDAG[TInput, TOutput]) Execute(ctx context.Context, input *TInput) *TOutput {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	root, cancel := context.WithCancelCause(ctx)
-	d.SimpleDAGContext = SimpleDAGContext{context: root, cancel: cancel}
-	err := d.BuildWorkflow(ctx)
+// RedundantChannelsError indicates that there are unused channelInputs.
+type RedundantChannelsError struct {
+	channels []string
+	error
+}
+
+func (e *RedundantChannelsError) Error() string {
+	return fmt.Sprintf("Redundant channelInputs: %v", strings.Join(e.channels, ", "))
+}
+
+// TransitChannelNonExistError indicates that the channel(s) to be used by the specified node does not exist.
+type TransitChannelNonExistError struct {
+	transitName    string
+	channelInputs  []string
+	channelOutputs []string
+	error
+}
+
+func (e *TransitChannelNonExistError) Error() string {
+	return fmt.Sprintf("The specified channel(s) does not exist: input[%v], output[%v]", strings.Join(e.channelInputs, ", "), strings.Join(e.channelOutputs, ", "))
+}
+
+func (d *SimpleDAG[TInput, TOutput]) CheckChannelUsedInTransits() error {
+	if d.channels == nil {
+		return ErrChannelNotInitialized
+	}
+	channels := make(map[string]struct{})
+	for key := range d.channels {
+		channels[key] = struct{}{}
+	}
+	for _, value := range d.workflowTransits {
+		for _, i := range value.channelInputs {
+			delete(channels, i)
+		}
+		for _, o := range value.channelOutputs {
+			delete(channels, o)
+		}
+	}
+	if len(channels) > 0 {
+		c := make([]string, len(channels))
+		index := 0
+		for i := range channels {
+			c[index] = i
+			index++
+		}
+		return &RedundantChannelsError{channels: c}
+	}
+	return nil
+}
+
+func (d *SimpleDAG[TInput, TOutput]) CheckChannelExistsInTransits() error {
+	return nil
+}
+
+func (d *SimpleDAG[TInput, TOutput]) CheckChannelsAndWorkflows() error {
+	return nil
+}
+
+func (d *SimpleDAG[TInput, TOutput]) Execute(root context.Context, input *TInput) *TOutput {
+	ctx, cancel := context.WithCancelCause(root)
+	d.SimpleDAGContext = SimpleDAGContext{context: ctx, cancel: cancel}
+	err := d.BuildWorkflow(d.SimpleDAGContext.context)
 	if err != nil {
 		return nil
 	}
 	var results *TOutput
-	//var wg sync.WaitGroup
-	//wg.Add(1)
 	signal := make(chan struct{})
-	go func() {
-		//defer wg.Done()
+	go func(ctx context.Context) {
 		defer func() {
 			signal <- struct{}{}
 		}()
-		//defer log.Println("execute done.")
-		//log.Println("execute 1")
 		r := d.BuildWorkflowOutput(ctx, d.channelOutput)
 		select {
 		case <-ctx.Done(): // If the end notification has been received, it will exit directly.
 			return
 		default:
 		}
-		//log.Println("execute 2")
 		if r, ok := (*r)[0].(TOutput); !ok {
 			t := new(TOutput)
 			var e = SimpleDAGValueTypeError{actual: r, expect: t}
@@ -445,10 +513,8 @@ func (d *SimpleDAG[TInput, TOutput]) Execute(ctx context.Context, input *TInput)
 		} else {
 			results = &r
 		}
-	}()
-	d.BuildWorkflowInput(ctx, *input, d.channelInput)
-	//wg.Wait()
-	// time.Sleep(time.Second * 10)
+	}(d.SimpleDAGContext.context)
+	d.BuildWorkflowInput(d.SimpleDAGContext.context, *input, d.channelInput)
 	<-signal
 	return results
 }
