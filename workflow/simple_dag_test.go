@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"context"
+	"errors"
 	"log"
 	"strconv"
 	"testing"
@@ -46,6 +47,7 @@ func TestSimpleDAGValueTypeError_Error(t *testing.T) {
 		},
 	})
 	input := "input"
+	assert.Nil(t, f.Execute(context.Background(), &input))
 	assert.Nil(t, f.RunOnce(context.Background(), &input))
 }
 
@@ -234,19 +236,19 @@ func TestSimpleDAGOneStaightPipeline(t *testing.T) {
 		var results = f.RunOnce(root, &input)
 		assert.Equal(t, "test", *results)
 	})
-	//t.Run("error case", func(t *testing.T) {
-	//	f := NewDAGOneStraightPipeline()
-	//	transits := DAGOneStraightPipeline
-	//	transits[1].worker = func(a ...any) (any, error) {
-	//		log.Println("transit1...")
-	//		time.Sleep(time.Second)
-	//		return nil, errors.New("error(s) occurred")
-	//	}
-	//	f.AttachWorkflowTransit(transits...)
-	//	var input = "test"
-	//	var results = f.RunOnce(root, &input)
-	//	assert.Nil(t, results)
-	//})
+	t.Run("error case", func(t *testing.T) {
+		f := NewDAGOneStraightPipeline()
+		transits := DAGOneStraightPipeline
+		transits[1].worker = func(a ...any) (any, error) {
+			log.Println("transit1...")
+			time.Sleep(time.Second)
+			return nil, errors.New("error(s) occurred")
+		}
+		f.AttachWorkflowTransit(transits...)
+		var input = "test"
+		var results = f.RunOnce(root, &input)
+		assert.Nil(t, results)
+	})
 }
 
 // NewDAGThreeParallelDelayedTransits defines a workflow.
@@ -266,7 +268,7 @@ func NewDAGThreeParallelDelayedTransits() *SimpleDAG1 {
 }
 
 func TestSimpleDAGContext_Cancel(t *testing.T) {
-	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+	log.SetFlags(log.Lshortfile | log.LstdFlags | log.Lmicroseconds)
 	root := context.Background()
 	t.Run("normal case", func(t *testing.T) {
 		f := NewDAGThreeParallelDelayedTransits()
@@ -276,27 +278,28 @@ func TestSimpleDAGContext_Cancel(t *testing.T) {
 		assert.Equal(t, "0test1test2test", *results)
 	})
 	t.Run("error case", func(t *testing.T) {
-		//f := NewDAGThreeParallelDelayedTransits()
-		//transits := DAGThreeParallelDelayedWorkflowTransits
-		//transits[1].worker = func(a ...any) (any, error) {
-		//	log.Println("transit1...")
-		//	time.Sleep(time.Second)
-		//	return nil, errors.New("error(s) occurred")
-		//}
-		//transits[1] = &SimpleDAGWorkflowTransit{
-		//	name:           "transit1",
-		//	channelInputs:  []string{"t11"},
-		//	channelOutputs: []string{"t21"},
-		//	worker: func(a ...any) (any, error) {
-		//		log.Println("transit1...")
-		//		//return nil, errors.New("error(s) occurred")
-		//		time.Sleep(time.Second)
-		//		log.Println("transit1... finished.")
-		//		return a[0], nil
-		//	},
-		//}
-		//var input = "test"
-		//var results = f.RunOnce(root, &input)
-		//log.Println(results)
+		f := NewDAGThreeParallelDelayedTransits()
+		transits := DAGThreeParallelDelayedWorkflowTransits
+		transits[1] = &SimpleDAGWorkflowTransit{
+			name:           "transit1",
+			channelInputs:  []string{"t11"},
+			channelOutputs: []string{"t21"},
+			worker: func(a ...any) (any, error) {
+				log.Println("transit1...")
+				time.Sleep(time.Second)
+				return nil, errors.New("error(s) occurred")
+			},
+		}
+		f.AttachWorkflowTransit(transits...)
+		var input = "test"
+		var results = f.RunOnce(root, &input)
+		assert.Nil(t, results)
+	})
+}
+
+func TestRedundantChannelsError_Error(t *testing.T) {
+	t.Run("multi names", func(t *testing.T) {
+		err := RedundantChannelsError{channels: []string{"a", "b"}}
+		assert.Equal(t, "Redundant channelInputs: a, b", err.Error())
 	})
 }
