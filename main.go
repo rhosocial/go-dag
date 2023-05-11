@@ -9,7 +9,7 @@ import (
 func main() {
 }
 
-func subtest(ctx context.Context, name string) {
+func subtest(ctx context.Context, name string, doneCallback func()) {
 	index := 0
 	for {
 		time.Sleep(100 * time.Millisecond)
@@ -19,6 +19,9 @@ func subtest(ctx context.Context, name string) {
 			log.Printf("%s: %s\n", name, context.Cause(ctx))
 			if value, ok := ctx.Value("parent").(string); ok {
 				log.Printf("%s: parent:%s\n", name, value)
+			}
+			if doneCallback != nil {
+				doneCallback()
 			}
 			return
 		default:
