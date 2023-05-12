@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/stretchr/testify/assert"
 	"log"
 	"math/rand"
 	"sync"
@@ -139,6 +140,7 @@ func TestWaitGroup(t *testing.T) {
 
 	t.Run("all tasks are waiting for notification to start", func(t *testing.T) {
 		const N = 5
+		value := [N]int{0, 0, 0, 0, 0}
 		sub2, _ := context.WithCancel(root)
 		var subContexts [N]context.Context
 		var wgNotification, wgReady sync.WaitGroup
@@ -150,13 +152,24 @@ func TestWaitGroup(t *testing.T) {
 				wgNotification.Wait()
 				rand := rand.New(rand.NewSource(time.Now().UnixNano()))
 				subContexts[i], _ = context.WithTimeout(sub2, time.Duration(rand.Uint32()%400+100)*time.Millisecond)
-				subtest(subContexts[i], fmt.Sprintf("sub2%d", i), wgReady.Done)
+				subtest(subContexts[i], fmt.Sprintf("sub2%d", i), func() {
+					value[i] = 1
+					wgReady.Done()
+				})
 			}()
 		}
 		time.Sleep(1 * time.Second)
+		for i := 0; i < N; i++ {
+			i := i
+			assert.Equal(t, 0, value[i])
+		}
 		wgNotification.Done()
 		log.Println("start")
 		wgReady.Wait()
+		for i := 0; i < N; i++ {
+			i := i
+			assert.Equal(t, 1, value[i])
+		}
 		log.Println("all done")
 	})
 }
