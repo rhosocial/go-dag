@@ -12,9 +12,12 @@ import (
 	"time"
 )
 
+// TestSubContext tests subcontext.
 func TestSubContext(t *testing.T) {
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 	root := context.Background()
 
+	// Set the timeout to 1 second. Executed every 100 milliseconds, means to execute ten times.
 	t.Run("with timeout", func(t *testing.T) {
 		sub1, _ := context.WithTimeout(root, 1*time.Second)
 		subtest(sub1, "sub1", nil)
@@ -129,8 +132,8 @@ func TestWaitGroup(t *testing.T) {
 		for i := 0; i < N; i++ {
 			i := i
 			go func() {
-				rand := rand.New(rand.NewSource(time.Now().UnixNano()))
-				subContexts[i], _ = context.WithTimeout(sub1, time.Duration(rand.Uint32()%400+100)*time.Millisecond)
+				rands := rand.New(rand.NewSource(time.Now().UnixNano()))
+				subContexts[i], _ = context.WithTimeout(sub1, time.Duration(rands.Uint32()%400+100)*time.Millisecond)
 				subtest(subContexts[i], fmt.Sprintf("sub1%d", i), wg.Done)
 			}()
 		}
@@ -150,8 +153,8 @@ func TestWaitGroup(t *testing.T) {
 			i := i
 			go func() {
 				wgNotification.Wait()
-				rand := rand.New(rand.NewSource(time.Now().UnixNano()))
-				subContexts[i], _ = context.WithTimeout(sub2, time.Duration(rand.Uint32()%400+100)*time.Millisecond)
+				rands := rand.New(rand.NewSource(time.Now().UnixNano()))
+				subContexts[i], _ = context.WithTimeout(sub2, time.Duration(rands.Uint32()%400+100)*time.Millisecond)
 				subtest(subContexts[i], fmt.Sprintf("sub2%d", i), func() {
 					value[i] = 1
 					wgReady.Done()
