@@ -24,6 +24,7 @@ func TestSubContext(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	})
 
+	// Set the timeout to 1 second from now. Executed every 100 milliseconds, means to execute ten times.
 	t.Run("with deadline", func(t *testing.T) {
 		sub2, _ := context.WithDeadline(root, time.Now().Add(1*time.Second))
 		subtest(sub2, "sub2", nil)
