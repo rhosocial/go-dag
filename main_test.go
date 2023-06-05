@@ -17,20 +17,24 @@ func TestSubContext(t *testing.T) {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 	root := context.Background()
 
-	// Set the timeout to 1 second. Executed every 100 milliseconds, means to execute ten times.
+	// Set the timeout to 1 second.
+	// The objective function is executed every 100 milliseconds, which means it is executed ten times.
 	t.Run("with timeout", func(t *testing.T) {
 		sub1, _ := context.WithTimeout(root, 1*time.Second)
 		subtest(sub1, "sub1", nil)
 		time.Sleep(10 * time.Millisecond)
 	})
 
-	// Set the timeout to 1 second from now. Executed every 100 milliseconds, means to execute ten times.
+	// Set the timeout to 1 second from now.
+	// The objective function is executed every 100 milliseconds, which means it is executed ten times.
 	t.Run("with deadline", func(t *testing.T) {
 		sub2, _ := context.WithDeadline(root, time.Now().Add(1*time.Second))
 		subtest(sub2, "sub2", nil)
 		time.Sleep(10 * time.Millisecond)
 	})
 
+	// Call the cancel function handle after 1 second.
+	// The objective function is executed every 100 milliseconds, which means it is executed ten times.
 	t.Run("with cancel", func(t *testing.T) {
 		sub3, cancelFunc3 := context.WithCancel(root)
 		go subtest(sub3, "sub3", nil)
@@ -39,6 +43,8 @@ func TestSubContext(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	})
 
+	// Call the cancel function handle after 1 second, and pass in the cancellation reason.
+	// The objective function is executed every 100 milliseconds, which means it is executed ten times.
 	t.Run("with cancel cause", func(t *testing.T) {
 		sub4, cancelFunc4 := context.WithCancelCause(root)
 		go subtest(sub4, "sub4", nil)
