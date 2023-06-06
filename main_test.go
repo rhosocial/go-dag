@@ -54,7 +54,9 @@ func TestSubContext(t *testing.T) {
 	})
 }
 
+// TestNestedContext tests nested contexts.
 func TestNestedContext(t *testing.T) {
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 	root := context.Background()
 
 	t.Run("with timeout and its sub context with value", func(t *testing.T) {
