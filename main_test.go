@@ -100,7 +100,9 @@ func TestNestedContext(t *testing.T) {
 	})
 }
 
+// TestNestedContextWithValue tests nested context with value.
 func TestNestedContextWithValue(t *testing.T) {
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 	root := context.Background()
 
 	t.Run("with value and its sub context cancel", func(t *testing.T) {
