@@ -29,3 +29,17 @@ func subtest(ctx context.Context, name string, doneCallback func()) {
 		}
 	}
 }
+
+// clientChan must be initialized before use
+var clientChan chan string
+
+func producer(content string) {
+	clientChan <- content
+}
+
+func consumer() *string {
+	if content, ok := <-clientChan; ok {
+		return &content
+	}
+	return nil
+}
