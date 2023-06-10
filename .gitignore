@@ -19,5 +19,5 @@
 
 # Go workspace file
 go.work
-go.sub
+go.sum
 /.idea/
