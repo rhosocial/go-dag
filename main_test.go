@@ -191,11 +191,23 @@ func TestWaitGroup(t *testing.T) {
 func TestProduceAndConsume(t *testing.T) {
 	// Since there is no consumer listening to the channel during production, a buffer must be set for the channel,
 	// otherwise it will block for a long time because there is no consumer and eventually lead to deadlock.
-	t.Run("Produce first, consumer later.", func(t *testing.T) {
+	t.Run("Produce first, consume later.", func(t *testing.T) {
 		clientChan = make(chan string, 1)
+		defer close(clientChan)
 		producer("channel")
 		content := consumer()
 		assert.NotNil(t, content)
 		assert.Equal(t, "channel", *content)
+	})
+
+	// If it is produced twice and consumed once, the consumer gets the content in the order of production.
+	t.Run("Produce twice first, consume later.", func(t *testing.T) {
+		clientChan = make(chan string, 2)
+		defer close(clientChan)
+		producer("channel1")
+		producer("channel2")
+		content := consumer()
+		assert.NotNil(t, content)
+		assert.Equal(t, "channel1", *content)
 	})
 }
