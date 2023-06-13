@@ -210,4 +210,17 @@ func TestProduceAndConsume(t *testing.T) {
 		assert.NotNil(t, content)
 		assert.Equal(t, "channel1", *content)
 	})
+
+	// The consumer first listens to the channel, and the producer then sends data to the channel.
+	// The consumer will block until it receives data.
+	t.Run("Consumer wait for producer to produce.", func(t *testing.T) {
+		clientChan = make(chan string)
+		defer close(clientChan)
+		go func() {
+			content := consumer()
+			assert.NotNil(t, content)
+			assert.Equal(t, "channel1", *content)
+		}()
+		producer("channel1")
+	})
 }
