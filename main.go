@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"log"
+	"strings"
+	"sync"
 	"time"
 )
 
@@ -39,6 +41,37 @@ func producer(content string) {
 
 func consumer() *string {
 	if content, ok := <-clientChan; ok {
+		return &content
+	}
+	return nil
+}
+
+// dagChanMap must be initialized before use
+var dagChanMap map[string]chan string
+
+func dagInput(key string, content string) {
+	dagChanMap[key] <- content
+}
+
+func dagOperator(next string, prevs ...string) {
+	var count = len(prevs)
+	var contents = make([]string, count)
+	var wg sync.WaitGroup
+	wg.Add(count)
+	for i, prev := range prevs {
+		go func() {
+			if content, ok := <-dagChanMap[prev]; ok {
+				contents[i] = content
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+	dagChanMap[next] <- strings.Join(contents, ",")
+}
+
+func dagOutput(key string) *string {
+	if content, ok := <-dagChanMap[key]; ok {
 		return &content
 	}
 	return nil

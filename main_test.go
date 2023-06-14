@@ -224,3 +224,17 @@ func TestProduceAndConsume(t *testing.T) {
 		producer("channel1")
 	})
 }
+
+func TestDAG(t *testing.T) {
+	t.Run("Input and output only", func(t *testing.T) {
+		dagChanMap = make(map[string]chan string)
+		dagChanMap["input"] = make(chan string)
+		defer close(dagChanMap["input"])
+		go func() {
+			content := dagOutput("input")
+			assert.NotNil(t, content)
+			assert.Equal(t, "channelInput", *content)
+		}()
+		dagInput("input", "channelInput")
+	})
+}
