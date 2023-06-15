@@ -225,16 +225,242 @@ func TestProduceAndConsume(t *testing.T) {
 	})
 }
 
-func TestDAG(t *testing.T) {
+func TestDAGSequential(t *testing.T) {
+	// The flowchart is:
+	//         chanInOut
+	// input -------------> output
 	t.Run("Input and output only", func(t *testing.T) {
+		dagChanMap = make(map[string]chan string)
+		dagChanMap["chanInOut"] = make(chan string)
+		defer close(dagChanMap["chanInOut"])
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			content := dagOutput("chanInOut")
+			assert.NotNil(t, content)
+			assert.Equal(t, "channelInput", *content)
+			t.Log(*content)
+			wg.Done()
+		}()
+		dagInput("channelInput", "chanInOut")
+		wg.Wait()
+		t.Log("finished.")
+	})
+
+	// The flowchart is:
+	// (chan name)  chanInTran              chanTranOut
+	//      input --------------> transit --------------> output
+	t.Run("A single input and a single output, with a transit in between.", func(t *testing.T) {
+		dagChanMap = make(map[string]chan string)
+		dagChanMap["chanInTran"] = make(chan string)
+		defer close(dagChanMap["chanInTran"])
+		dagChanMap["chanTranOut"] = make(chan string)
+		defer close(dagChanMap["chanTranOut"])
+
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			content := dagOutput("chanTranOut")
+			t.Log("output")
+			assert.NotNil(t, content)
+			assert.Equal(t, "channelInput", *content)
+			wg.Done()
+		}()
+		go func() {
+			content := dagOutput("chanInTran")
+			dagInput(*content, "chanTranOut")
+			t.Log("transit")
+			wg.Done()
+		}()
+		t.Log("input")
+		dagInput("channelInput", "chanInTran")
+		wg.Wait()
+		t.Log("finished.")
+	})
+
+	// The flowchart is:
+	//            input                   transit1
+	// input --------------> transit ---------------> output1
+	//                            |       transit2
+	//                            + ----------------> output2
+	//                            |       transit3
+	//                            + ----------------> output3
+	t.Run("A single input and three outputs, with a transit in between.", func(t *testing.T) {
 		dagChanMap = make(map[string]chan string)
 		dagChanMap["input"] = make(chan string)
 		defer close(dagChanMap["input"])
+		dagChanMap["transit1"] = make(chan string)
+		defer close(dagChanMap["transit1"])
+		dagChanMap["transit2"] = make(chan string)
+		defer close(dagChanMap["transit2"])
+		dagChanMap["transit3"] = make(chan string)
+		defer close(dagChanMap["transit3"])
+
+		var wg sync.WaitGroup
+		wg.Add(4)
 		go func() {
-			content := dagOutput("input")
+			content := dagOutput("transit3")
+			t.Log("output1")
 			assert.NotNil(t, content)
 			assert.Equal(t, "channelInput", *content)
+			wg.Done()
 		}()
-		dagInput("input", "channelInput")
+		go func() {
+			content := dagOutput("transit2")
+			t.Log("output2")
+			assert.NotNil(t, content)
+			assert.Equal(t, "channelInput", *content)
+			wg.Done()
+		}()
+		go func() {
+			content := dagOutput("transit1")
+			t.Log("output3")
+			assert.NotNil(t, content)
+			assert.Equal(t, "channelInput", *content)
+			wg.Done()
+		}()
+		go func() {
+			content := dagOutput("input")
+			dagInput(*content, "transit1", "transit2", "transit3")
+			t.Log("transit")
+			wg.Done()
+		}()
+		t.Log("input")
+		dagInput("channelInput", "input")
+		wg.Wait()
+		t.Log("finished.")
+	})
+
+	// The flowchart is:
+	//         input               transit1               transit2               transit3
+	// input ---------> transit1 ------------> transit2 ------------> transit3 ------------> output
+	t.Run("A single input and a single output, with three sequential transits in between.", func(t *testing.T) {
+		dagChanMap = make(map[string]chan string)
+		dagChanMap["input"] = make(chan string)
+		defer close(dagChanMap["input"])
+		dagChanMap["transit1"] = make(chan string)
+		defer close(dagChanMap["transit1"])
+		dagChanMap["transit2"] = make(chan string)
+		defer close(dagChanMap["transit2"])
+		dagChanMap["transit3"] = make(chan string)
+		defer close(dagChanMap["transit3"])
+
+		var wg sync.WaitGroup
+		wg.Add(4)
+		go func() {
+			content := dagOutput("transit3")
+			t.Log("output")
+			assert.NotNil(t, content)
+			assert.Equal(t, "channelInput", *content)
+			wg.Done()
+		}()
+		go func() {
+			content := dagOutput("transit2")
+			t.Log("transit3")
+			assert.NotNil(t, content)
+			assert.Equal(t, "channelInput", *content)
+			dagInput(*content, "transit3")
+			wg.Done()
+		}()
+		go func() {
+			content := dagOutput("transit1")
+			t.Log("transit2")
+			assert.NotNil(t, content)
+			assert.Equal(t, "channelInput", *content)
+			dagInput(*content, "transit2")
+			wg.Done()
+		}()
+		go func() {
+			content := dagOutput("input")
+			dagInput(*content, "transit1")
+			t.Log("transit1")
+			wg.Done()
+		}()
+		t.Log("input")
+		dagInput("channelInput", "input")
+		wg.Wait()
+		t.Log("finished.")
+	})
+}
+
+func TestDAGComplex(t *testing.T) {
+	// The two inputs are propagated to three transit respectively,
+	// and then each is propagated to two output nodes.
+	// The flowchart is:
+	//         +--+----> transit1 --------+------> output1
+	//         |  |                       |
+	// input1 -+  |                       |
+	//         |  |                       |
+	//         +--+----> transit2 --------+
+	//         |  |                       |
+	// input2 ----+                       |
+	//         |  |                       |
+	//         +--+----> transit3 --------+------> output2
+	t.Run("Multiple inputs and a single output with several transits in between.", func(t *testing.T) {
+		dagChanMap = make(map[string]chan string)
+		dagChanMap["input11"] = make(chan string)
+		defer close(dagChanMap["input11"])
+		dagChanMap["input12"] = make(chan string)
+		defer close(dagChanMap["input12"])
+		dagChanMap["input13"] = make(chan string)
+		defer close(dagChanMap["input13"])
+		dagChanMap["input21"] = make(chan string)
+		defer close(dagChanMap["input21"])
+		dagChanMap["input22"] = make(chan string)
+		defer close(dagChanMap["input22"])
+		dagChanMap["input23"] = make(chan string)
+		defer close(dagChanMap["input23"])
+		dagChanMap["transit1"] = make(chan string)
+		defer close(dagChanMap["transit1"])
+		dagChanMap["transit2"] = make(chan string)
+		defer close(dagChanMap["transit2"])
+		dagChanMap["transit3"] = make(chan string)
+		defer close(dagChanMap["transit3"])
+
+		var wg sync.WaitGroup
+		wg.Add(4)
+
+		go func() {
+			content := dagOutput("transit1", "transit2", "transit3")
+			t.Log("output")
+			assert.NotNil(t, content)
+			t.Log(*content)
+			wg.Done()
+		}()
+		go func() {
+			content := dagOutput("input11", "input21")
+			assert.NotNil(t, content)
+			dagInput(*content, "transit1")
+			t.Log("transit1")
+			assert.NotNil(t, content)
+			t.Log(*content)
+			wg.Done()
+		}()
+		go func() {
+			content := dagOutput("input12", "input22")
+			assert.NotNil(t, content)
+			dagInput(*content, "transit2")
+			t.Log("transit2")
+			assert.NotNil(t, content)
+			t.Log(*content)
+			wg.Done()
+		}()
+		go func() {
+			content := dagOutput("input13", "input23")
+			assert.NotNil(t, content)
+			dagInput(*content, "transit3")
+			t.Log("transit3")
+			assert.NotNil(t, content)
+			t.Log(*content)
+			wg.Done()
+		}()
+		t.Log("input")
+		start := time.Now().UnixMicro()
+		dagInput("channelInput1", "input11", "input12", "input13")
+		dagInput("channelInput2", "input21", "input22", "input23")
+		wg.Wait()
+		end := time.Now().UnixMicro()
+		t.Log("finished.")
+		t.Log(fmt.Sprintf("Time Elapsed: %d (micro sec)", end-start))
 	})
 }

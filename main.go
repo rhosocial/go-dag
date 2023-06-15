@@ -49,30 +49,29 @@ func consumer() *string {
 // dagChanMap must be initialized before use
 var dagChanMap map[string]chan string
 
-func dagInput(key string, content string) {
-	dagChanMap[key] <- content
+func dagInput(content string, chanNames ...string) {
+	for _, next := range chanNames {
+		next := next
+		go func(next string) {
+			dagChanMap[next] <- content
+		}(next)
+	}
 }
 
-func dagOperator(next string, prevs ...string) {
-	var count = len(prevs)
+func dagOutput(chanNames ...string) *string {
+	var count = len(chanNames)
 	var contents = make([]string, count)
 	var wg sync.WaitGroup
 	wg.Add(count)
-	for i, prev := range prevs {
-		go func() {
-			if content, ok := <-dagChanMap[prev]; ok {
-				contents[i] = content
-			}
+	for i, name := range chanNames {
+		i := i
+		name := name
+		go func(i int, name string) {
+			contents[i] = <-dagChanMap[name]
 			wg.Done()
-		}()
+		}(i, name)
 	}
 	wg.Wait()
-	dagChanMap[next] <- strings.Join(contents, ",")
-}
-
-func dagOutput(key string) *string {
-	if content, ok := <-dagChanMap[key]; ok {
-		return &content
-	}
-	return nil
+	var content = strings.Join(contents, ",")
+	return &content
 }
