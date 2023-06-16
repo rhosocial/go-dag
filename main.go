@@ -76,5 +76,28 @@ func dagOutput(chanNames ...string) *string {
 	return &content
 }
 
-type DAG[T1 interface{}, T2 interface{}] interface {
+type DAGInterface[T1, T2 any] interface {
+	InitChannels(channels *[]string)
+	InitWorkflows(input func(*T1, []string), output func([]string) *T2, transits ...func([]string, []string))
+	Run(input *T1) *T2
+}
+
+type DAG[T1, T2 any] struct {
+	channels map[string]chan any
+	DAGInterface[T1, T2]
+}
+
+func (d *DAG[T1, T2]) InitChannels(channels *[]string) {
+	if channels == nil || len(*channels) == 0 {
+		return
+	}
+	d.channels = make(map[string]chan any, len(*channels))
+	for _, v := range *channels {
+		v := v
+		d.channels[v] = make(chan any)
+	}
+}
+
+func (d *DAG[T1, T2]) InitWorkflows(input func(*T1, []string), output func([]string) *T2, transits ...func([]string, []string)) {
+
 }

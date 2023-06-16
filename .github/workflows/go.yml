@@ -28,6 +28,8 @@ jobs:
 
       - name: Test
         run: go test -v ./...
+      - name: Benchmark
+        run: go test -bench .
       - name: Stop containers
         if: always()
         run: docker-compose -f tests/environments/go1.20_redis7_mysql8/docker-compose.yml down
