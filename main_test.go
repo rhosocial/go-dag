@@ -555,3 +555,24 @@ func BenchmarkDAGComplex(b *testing.B) {
 		wg.Wait()
 	})
 }
+
+type DAGStraightPipe struct {
+	DAG[string, string]
+}
+
+func NewDAGStraightPipe() *DAGStraightPipe {
+	f := DAGStraightPipe{}
+	f.InitChannels("straight_pipe")
+	f.InitWorkflow("straight_pipe", "straight_pipe")
+	return &f
+}
+
+func TestDAGStraightPipe(t *testing.T) {
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+	t.Run("init", func(t *testing.T) {
+		f := NewDAGStraightPipe()
+		var input = "test"
+		var results = f.Run(&input)
+		t.Log(results)
+	})
+}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"strings"
 	"sync"
@@ -76,28 +77,153 @@ func dagOutput(chanNames ...string) *string {
 	return &content
 }
 
-type DAGInterface[T1, T2 any] interface {
-	InitChannels(channels *[]string)
-	InitWorkflows(input func(*T1, []string), output func([]string) *T2, transits ...func([]string, []string))
-	Run(input *T1) *T2
+type DAGWorkflowTransit struct {
+	Name           string
+	channelInputs  []string
+	channelOutputs []string
+	worker         func(...any) any
 }
 
-type DAG[T1, T2 any] struct {
-	channels map[string]chan any
-	DAGInterface[T1, T2]
+type DAGInterface[TInput, TOutput any] interface {
+	InitChannels(channels ...string)
+	InitWorkflow(input string, output string, transits ...*DAGWorkflowTransit)
+	BuildWorkflow()
+	BuildWorkflowInput(result any, inputs ...string)
+	BuildWorkflowOutput(outputs ...string) *[]any
+	CloseWorkflow()
+	Run(input *TInput) *TOutput
 }
 
-func (d *DAG[T1, T2]) InitChannels(channels *[]string) {
-	if channels == nil || len(*channels) == 0 {
+type DAG[TInput, TOutput any] struct {
+	channels         map[string]chan any
+	workflowInput    string
+	workflowOutput   string
+	workflowTransits []*DAGWorkflowTransit
+	DAGInterface[TInput, TOutput]
+}
+
+// InitChannels initializes channels for workflows.
+//
+// The parameter is the channel name. The channel name cannot be repeated, otherwise the last input shall prevail.
+func (d *DAG[TInput, TOutput]) InitChannels(channels ...string) {
+	if channels == nil || len(channels) == 0 {
 		return
 	}
-	d.channels = make(map[string]chan any, len(*channels))
-	for _, v := range *channels {
+	d.channels = make(map[string]chan any, len(channels))
+	for _, v := range channels {
 		v := v
 		d.channels[v] = make(chan any)
 	}
 }
 
-func (d *DAG[T1, T2]) InitWorkflows(input func(*T1, []string), output func([]string) *T2, transits ...func([]string, []string)) {
+// InitWorkflow initializes workflows.
+//
+// The parameter is the name of the workflow node.
+func (d *DAG[TInput, TOutput]) InitWorkflow(input string, output string, transits ...*DAGWorkflowTransit) {
+	d.workflowInput = input
+	d.workflowOutput = output
+	lenTransits := len(transits)
+	if lenTransits == 0 {
+		return
+	}
+	d.workflowTransits = make([]*DAGWorkflowTransit, lenTransits)
+	for i, t := range transits {
+		d.workflowTransits[i] = t
+	}
+}
 
+func (d *DAG[TInput, TOutput]) BuildWorkflowInput(result any, inputs ...string) {
+	for _, next := range inputs {
+		next := next
+		go func(next string) {
+			log.Println(fmt.Sprintf("WorkflowInput[channel: %s] preparing: ", next), result)
+			d.channels[next] <- result
+			log.Println(fmt.Sprintf("WorkflowInput[channel: %s] sent: ", next), result)
+		}(next)
+	}
+}
+
+func (d *DAG[TInput, TOutput]) BuildWorkflowOutput(outputs ...string) *[]any {
+	var count = len(outputs)
+	var results = make([]any, count)
+	var wg sync.WaitGroup
+	wg.Add(count)
+	for i, name := range outputs {
+		i := i
+		name := name
+		go func(i int, name string) {
+			log.Println(fmt.Sprintf("WorkflowOutput[channel: %s] listening: ", name))
+			results[i] = <-d.channels[name]
+			log.Println(fmt.Sprintf("WorkflowOutput[channel: %s] received: ", name), results[i])
+			wg.Done()
+		}(i, name)
+	}
+	wg.Wait()
+	log.Println(fmt.Sprintf("WorkflowOutput len: %d", len(results)))
+	return &results
+}
+
+func (d *DAG[TInput, TOutput]) BuildWorkflow() {
+	// Build Input
+	if len(d.workflowInput) == 0 {
+		return
+	}
+
+	// Build Output
+	if len(d.workflowOutput) == 0 {
+		return
+	}
+
+	// Build Transits
+	if len(d.workflowTransits) == 0 {
+		return
+	}
+	for _, t := range d.workflowTransits {
+		go func(t *DAGWorkflowTransit) {
+			var results = d.BuildWorkflowOutput(t.channelOutputs...)
+
+			var result = t.worker(*results...)
+
+			d.BuildWorkflowInput(result, t.channelInputs...)
+		}(t)
+	}
+}
+
+func (d *DAG[TInput, TOutput]) CloseWorkflow() {
+	if len(d.workflowInput) == 0 {
+		return
+	}
+	//close(d.channels[d.workflowInput])
+	if len(d.workflowOutput) == 0 {
+		return
+	}
+	//close(d.channels[d.workflowOutput])
+	if len(d.workflowTransits) == 0 {
+		return
+	}
+	for _, t := range d.workflowTransits {
+		for _, c := range t.channelInputs {
+			close(d.channels[c])
+		}
+	}
+}
+
+func (d *DAG[TInput, TOutput]) Run(input *TInput) *TOutput {
+	d.BuildWorkflow()
+	defer d.CloseWorkflow()
+
+	var results TOutput
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		r := d.BuildWorkflowOutput(d.workflowOutput)
+		log.Println("final output:", (*r)[0])
+		results = (*r)[0].(TOutput)
+		wg.Done()
+	}()
+	d.BuildWorkflowInput(*input, d.workflowInput)
+	defer close(d.channels[d.workflowInput])
+	wg.Wait()
+	log.Println("run:", results)
+	return &results
 }
