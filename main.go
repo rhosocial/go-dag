@@ -75,3 +75,6 @@ func dagOutput(chanNames ...string) *string {
 	var content = strings.Join(contents, ",")
 	return &content
 }
+
+type DAG[T1 interface{}, T2 interface{}] interface {
+}

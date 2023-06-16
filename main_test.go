@@ -466,3 +466,93 @@ func TestDAGComplex(t *testing.T) {
 		t.Log(fmt.Sprintf("Time Elapsed: %d (micro sec)", end-start))
 	})
 }
+
+func BenchmarkDAGSequential(b *testing.B) {
+	b.Run("Input and output only", func(b *testing.B) {
+		dagChanMap = make(map[string]chan string)
+		dagChanMap["chanInOut"] = make(chan string)
+		defer close(dagChanMap["chanInOut"])
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			content := dagOutput("chanInOut")
+			assert.NotNil(b, content)
+			assert.Equal(b, "channelInput", *content)
+			b.Log(*content)
+			wg.Done()
+		}()
+		dagInput("channelInput", "chanInOut")
+		wg.Wait()
+		b.Log("finished.")
+	})
+}
+
+func BenchmarkDAGComplex(b *testing.B) {
+	b.Run("Multiple inputs and a single output with several transits in between.", func(t *testing.B) {
+		dagChanMap = make(map[string]chan string)
+		dagChanMap["input11"] = make(chan string)
+		defer close(dagChanMap["input11"])
+		dagChanMap["input12"] = make(chan string)
+		defer close(dagChanMap["input12"])
+		dagChanMap["input13"] = make(chan string)
+		defer close(dagChanMap["input13"])
+		dagChanMap["input21"] = make(chan string)
+		defer close(dagChanMap["input21"])
+		dagChanMap["input22"] = make(chan string)
+		defer close(dagChanMap["input22"])
+		dagChanMap["input23"] = make(chan string)
+		defer close(dagChanMap["input23"])
+		dagChanMap["transit1"] = make(chan string)
+		defer close(dagChanMap["transit1"])
+		dagChanMap["transit2"] = make(chan string)
+		defer close(dagChanMap["transit2"])
+		dagChanMap["transit3"] = make(chan string)
+		defer close(dagChanMap["transit3"])
+
+		var wg sync.WaitGroup
+		wg.Add(4)
+
+		go func() {
+			content := dagOutput("transit1", "transit2", "transit3")
+			t.Log("output")
+			assert.NotNil(t, content)
+			t.Log(*content)
+			wg.Done()
+		}()
+		go func() {
+			content := dagOutput("input11", "input21")
+			assert.NotNil(t, content)
+			dagInput(*content, "transit1")
+			t.Log("transit1")
+			assert.NotNil(t, content)
+			t.Log(*content)
+			wg.Done()
+		}()
+		go func() {
+			content := dagOutput("input12", "input22")
+			assert.NotNil(t, content)
+			dagInput(*content, "transit2")
+			t.Log("transit2")
+			assert.NotNil(t, content)
+			t.Log(*content)
+			wg.Done()
+		}()
+		go func() {
+			content := dagOutput("input13", "input23")
+			assert.NotNil(t, content)
+			dagInput(*content, "transit3")
+			t.Log("transit3")
+			assert.NotNil(t, content)
+			t.Log(*content)
+			wg.Done()
+		}()
+		t.Log("input")
+		start := time.Now().UnixMicro()
+		dagInput("channelInput1", "input11", "input12", "input13")
+		dagInput("channelInput2", "input21", "input22", "input23")
+		wg.Wait()
+		end := time.Now().UnixMicro()
+		t.Log("finished.")
+		t.Log(fmt.Sprintf("Time Elapsed: %d (micro sec)", end-start))
+	})
+}
