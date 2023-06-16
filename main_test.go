@@ -384,18 +384,20 @@ func TestDAGSequential(t *testing.T) {
 }
 
 func TestDAGComplex(t *testing.T) {
-	// The two inputs are propagated to three transit respectively,
+	// The two inputs are propagated to three transits respectively,
 	// and then each is propagated to two output nodes.
 	// The flowchart is:
-	//         +--+----> transit1 --------+------> output1
+	//         +-------> transit1 --------+------> output1
+	//         |            |             |
+	// input1 -+  +---------+             |
 	//         |  |                       |
-	// input1 -+  |                       |
+	//         +-------> transit2 --------+
+	//         |  |         |             |
+	// input2 ----+---------+             |
 	//         |  |                       |
-	//         +--+----> transit2 --------+
-	//         |  |                       |
-	// input2 ----+                       |
-	//         |  |                       |
-	//         +--+----> transit3 --------+------> output2
+	//         +-------> transit3 --------+------> output2
+	//            |         |
+	//            +---------+
 	t.Run("Multiple inputs and a single output with several transits in between.", func(t *testing.T) {
 		dagChanMap = make(map[string]chan string)
 		dagChanMap["input11"] = make(chan string)
