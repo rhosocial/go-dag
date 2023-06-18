@@ -569,8 +569,37 @@ func NewDAGStraightPipe() *DAGStraightPipe {
 
 func TestDAGStraightPipe(t *testing.T) {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
-	t.Run("init", func(t *testing.T) {
+	t.Run("run", func(t *testing.T) {
 		f := NewDAGStraightPipe()
+		var input = "test"
+		var results = f.Run(&input)
+		t.Log(results)
+	})
+}
+
+type DAGOneTransit struct {
+	DAG[string, string]
+}
+
+func NewDAGOneTransit() *DAGOneTransit {
+	f := DAGOneTransit{}
+	f.InitChannels("input", "output")
+	f.InitWorkflow("input", "output", &DAGWorkflowTransit{
+		Name:           "transit",
+		channelInputs:  []string{"input"},
+		channelOutputs: []string{"output"},
+		worker: func(a ...any) any {
+			log.Println("transit: ", a)
+			return a[0]
+		},
+	})
+	return &f
+}
+
+func TestDAGOneTransit(t *testing.T) {
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+	t.Run("run", func(t *testing.T) {
+		f := NewDAGOneTransit()
 		var input = "test"
 		var results = f.Run(&input)
 		t.Log(results)

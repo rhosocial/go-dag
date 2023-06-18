@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -135,6 +136,9 @@ func (d *DAG[TInput, TOutput]) InitWorkflow(input string, output string, transit
 func (d *DAG[TInput, TOutput]) BuildWorkflowInput(result any, inputs ...string) {
 	for _, next := range inputs {
 		next := next
+		if _, existed := d.channels[next]; !existed {
+			panic(fmt.Sprintf("Specified channel[%s] does not exist, not initialized?", next))
+		}
 		go func(next string) {
 			log.Println(fmt.Sprintf("WorkflowInput[channel: %s] preparing: ", next), result)
 			d.channels[next] <- result
@@ -145,14 +149,18 @@ func (d *DAG[TInput, TOutput]) BuildWorkflowInput(result any, inputs ...string) 
 
 func (d *DAG[TInput, TOutput]) BuildWorkflowOutput(outputs ...string) *[]any {
 	var count = len(outputs)
+	log.Println("WorkflowOutput will receive the contents from: ", outputs)
 	var results = make([]any, count)
 	var wg sync.WaitGroup
 	wg.Add(count)
 	for i, name := range outputs {
 		i := i
 		name := name
+		if _, existed := d.channels[name]; !existed {
+			panic(fmt.Sprintf("Specified channel[%s] does not exist, not initialized?", name))
+		}
 		go func(i int, name string) {
-			log.Println(fmt.Sprintf("WorkflowOutput[channel: %s] listening: ", name))
+			log.Println(fmt.Sprintf("WorkflowOutput[channel: %s] listening...", name))
 			results[i] = <-d.channels[name]
 			log.Println(fmt.Sprintf("WorkflowOutput[channel: %s] received: ", name), results[i])
 			wg.Done()
@@ -180,11 +188,11 @@ func (d *DAG[TInput, TOutput]) BuildWorkflow() {
 	}
 	for _, t := range d.workflowTransits {
 		go func(t *DAGWorkflowTransit) {
-			var results = d.BuildWorkflowOutput(t.channelOutputs...)
+			var results = d.BuildWorkflowOutput(t.channelInputs...)
 
 			var result = t.worker(*results...)
 
-			d.BuildWorkflowInput(result, t.channelInputs...)
+			d.BuildWorkflowInput(result, t.channelOutputs...)
 		}(t)
 	}
 }
@@ -202,7 +210,7 @@ func (d *DAG[TInput, TOutput]) CloseWorkflow() {
 		return
 	}
 	for _, t := range d.workflowTransits {
-		for _, c := range t.channelInputs {
+		for _, c := range t.channelOutputs {
 			close(d.channels[c])
 		}
 	}
@@ -218,12 +226,18 @@ func (d *DAG[TInput, TOutput]) Run(input *TInput) *TOutput {
 	go func() {
 		r := d.BuildWorkflowOutput(d.workflowOutput)
 		log.Println("final output:", (*r)[0])
-		results = (*r)[0].(TOutput)
+		if r, ok := (*r)[0].(TOutput); !ok {
+			t := new(TOutput)
+			panic(fmt.Sprintf("The type of the value received[%s] is inconsistent with the target[%s].", reflect.TypeOf(r), reflect.TypeOf(t)))
+		} else {
+			results = r
+		}
 		wg.Done()
 	}()
 	d.BuildWorkflowInput(*input, d.workflowInput)
 	defer close(d.channels[d.workflowInput])
+	log.Println("input sent:", *input)
 	wg.Wait()
-	log.Println("run:", results)
+	log.Println("output received:", results)
 	return &results
 }
