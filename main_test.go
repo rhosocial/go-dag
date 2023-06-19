@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -573,7 +574,7 @@ func TestDAGStraightPipe(t *testing.T) {
 		f := NewDAGStraightPipe()
 		var input = "test"
 		var results = f.Run(&input)
-		t.Log(results)
+		assert.Equal(t, "test", *results)
 	})
 }
 
@@ -603,5 +604,58 @@ func TestDAGOneTransit(t *testing.T) {
 		var input = "test"
 		var results = f.Run(&input)
 		t.Log(results)
+	})
+}
+
+type DAGTwoParallelTransits struct {
+	DAG[string, string]
+}
+
+func NewDAGTwoParallelTransits() *DAGTwoParallelTransits {
+	f := DAGTwoParallelTransits{}
+	f.InitChannels("input", "t11", "t12", "t21", "t22", "output")
+	f.InitWorkflow("input", "output", &DAGWorkflowTransit{
+		Name:           "input",
+		channelInputs:  []string{"input"},
+		channelOutputs: []string{"t11", "t12"},
+		worker: func(a ...any) any {
+			return a[0]
+		},
+	}, &DAGWorkflowTransit{
+		Name:           "transit1",
+		channelInputs:  []string{"t11"},
+		channelOutputs: []string{"t21"},
+		worker: func(a ...any) any {
+			return a[0]
+		},
+	}, &DAGWorkflowTransit{
+		Name:           "transit2",
+		channelInputs:  []string{"t12"},
+		channelOutputs: []string{"t22"},
+		worker: func(a ...any) any {
+			return a[0]
+		},
+	}, &DAGWorkflowTransit{
+		Name:           "transit",
+		channelInputs:  []string{"t21", "t22"},
+		channelOutputs: []string{"output"},
+		worker: func(a ...any) any {
+			var r string
+			for i, c := range a {
+				r = r + strconv.Itoa(i) + c.(string)
+			}
+			return r
+		},
+	})
+	return &f
+}
+
+func TestDAGTwoParallelTransits(t *testing.T) {
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+	t.Run("run", func(t *testing.T) {
+		f := NewDAGTwoParallelTransits()
+		var input = "test"
+		var results = f.Run(&input)
+		assert.Equal(t, "0test1test", *results)
 	})
 }
