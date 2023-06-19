@@ -582,9 +582,12 @@ type DAGOneTransit struct {
 	DAG[string, string]
 }
 
+// NewDAGOneTransit defines a workflow.
 func NewDAGOneTransit() *DAGOneTransit {
 	f := DAGOneTransit{}
 	f.InitChannels("input", "output")
+	//	       input              output
+	// input ---------> transit ----------> output
 	f.InitWorkflow("input", "output", &DAGWorkflowTransit{
 		Name:           "transit",
 		channelInputs:  []string{"input"},
@@ -611,9 +614,14 @@ type DAGTwoParallelTransits struct {
 	DAG[string, string]
 }
 
+// NewDAGTwoParallelTransits defines a workflow.
 func NewDAGTwoParallelTransits() *DAGTwoParallelTransits {
 	f := DAGTwoParallelTransits{}
 	f.InitChannels("input", "t11", "t12", "t21", "t22", "output")
+	//	       input               t11              output
+	// input ----+----> transit1 -------> transit ----------> output
+	//	         |                 t12       ^
+	//           +----> transit2 ------------+
 	f.InitWorkflow("input", "output", &DAGWorkflowTransit{
 		Name:           "input",
 		channelInputs:  []string{"input"},

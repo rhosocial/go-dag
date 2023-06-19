@@ -87,7 +87,9 @@ type DAGWorkflowTransit struct {
 
 type DAGInterface[TInput, TOutput any] interface {
 	InitChannels(channels ...string)
+	AttachChannels(channels ...string)
 	InitWorkflow(input string, output string, transits ...*DAGWorkflowTransit)
+	AttachWorkflowTransit(...*DAGWorkflowTransit)
 	BuildWorkflow()
 	BuildWorkflowInput(result any, inputs ...string)
 	BuildWorkflowOutput(outputs ...string) *[]any
@@ -117,6 +119,20 @@ func (d *DAG[TInput, TOutput]) InitChannels(channels ...string) {
 	}
 }
 
+func (d *DAG[TInput, TOutput]) AttachChannels(channels ...string) {
+	if channels == nil || len(channels) == 0 {
+		return
+	}
+	if d.channels == nil || len(d.channels) == 0 {
+		d.InitChannels(channels...)
+		return
+	}
+	for _, v := range channels {
+		v := v
+		d.channels[v] = make(chan any)
+	}
+}
+
 // InitWorkflow initializes workflows.
 //
 // The parameter is the name of the workflow node.
@@ -130,6 +146,12 @@ func (d *DAG[TInput, TOutput]) InitWorkflow(input string, output string, transit
 	d.workflowTransits = make([]*DAGWorkflowTransit, lenTransits)
 	for i, t := range transits {
 		d.workflowTransits[i] = t
+	}
+}
+
+func (d *DAG[TInput, TOutput]) AttachWorkflowTransit(transits ...*DAGWorkflowTransit) {
+	for _, t := range transits {
+		d.workflowTransits = append(d.workflowTransits, t)
 	}
 }
 
