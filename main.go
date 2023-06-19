@@ -156,14 +156,14 @@ func (d *DAG[TInput, TOutput]) BuildWorkflowOutput(outputs ...string) *[]any {
 	for i, name := range outputs {
 		i := i
 		name := name
-		if _, existed := d.channels[name]; !existed {
-			panic(fmt.Sprintf("Specified channel[%s] does not exist, not initialized?", name))
-		}
 		go func(i int, name string) {
+			defer wg.Done()
+			if _, existed := d.channels[name]; !existed {
+				panic(fmt.Sprintf("Specified channel[%s] does not exist, not initialized?", name))
+			}
 			log.Println(fmt.Sprintf("WorkflowOutput[channel: %s] listening...", name))
 			results[i] = <-d.channels[name]
 			log.Println(fmt.Sprintf("WorkflowOutput[channel: %s] received: ", name), results[i])
-			wg.Done()
 		}(i, name)
 	}
 	wg.Wait()
@@ -224,6 +224,7 @@ func (d *DAG[TInput, TOutput]) Run(input *TInput) *TOutput {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		r := d.BuildWorkflowOutput(d.workflowOutput)
 		log.Println("final output:", (*r)[0])
 		if r, ok := (*r)[0].(TOutput); !ok {
@@ -232,7 +233,6 @@ func (d *DAG[TInput, TOutput]) Run(input *TInput) *TOutput {
 		} else {
 			results = r
 		}
-		wg.Done()
 	}()
 	d.BuildWorkflowInput(*input, d.workflowInput)
 	defer close(d.channels[d.workflowInput])
