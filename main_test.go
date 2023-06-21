@@ -586,7 +586,7 @@ type DAGOneTransit struct {
 func NewDAGOneTransit() *DAGOneTransit {
 	f := DAGOneTransit{}
 	f.InitChannels("input", "output")
-	//	       input              output
+	//         input              output
 	// input ---------> transit ----------> output
 	f.InitWorkflow("input", "output", &DAGWorkflowTransit{
 		Name:           "transit",
@@ -620,7 +620,7 @@ func NewDAGTwoParallelTransits() *DAGTwoParallelTransits {
 	f.InitChannels("input", "t11", "t12", "t21", "t22", "output")
 	//	       input               t11              output
 	// input ----+----> transit1 -------> transit ----------> output
-	//	         |                 t12       ^
+	//           |                 t12       ^
 	//           +----> transit2 ------------+
 	f.InitWorkflow("input", "output", &DAGWorkflowTransit{
 		Name:           "input",
