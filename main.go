@@ -176,8 +176,8 @@ func (d *DAG[TInput, TOutput]) BuildWorkflowOutput(outputs ...string) *[]any {
 	var wg sync.WaitGroup
 	wg.Add(count)
 	for i, name := range outputs {
-		i := i
-		name := name
+		//i := i
+		//name := name
 		go func(i int, name string) {
 			defer wg.Done()
 			if _, existed := d.channels[name]; !existed {

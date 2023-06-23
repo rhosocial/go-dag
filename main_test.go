@@ -618,7 +618,7 @@ type DAGTwoParallelTransits struct {
 func NewDAGTwoParallelTransits() *DAGTwoParallelTransits {
 	f := DAGTwoParallelTransits{}
 	f.InitChannels("input", "t11", "t12", "t21", "t22", "output")
-	//	       input               t11              output
+	//         input               t11              output
 	// input ----+----> transit1 -------> transit ----------> output
 	//           |                 t12       ^
 	//           +----> transit2 ------------+
