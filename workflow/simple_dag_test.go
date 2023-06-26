@@ -1,7 +1,6 @@
 package workflow
 
 import (
-	"errors"
 	"log"
 	"strconv"
 	"testing"
@@ -42,9 +41,9 @@ func NewDAGTwoParallelTransits() *DAGTwoParallelTransits {
 		channelInputs:  []string{"t12"},
 		channelOutputs: []string{"t22"},
 		worker: func(a ...any) (any, error) {
-			var e = SimpleDAGValueTypeError{actual: new(int), expect: new(string)}
-			var t = SimpleDAGValueTypeError{actual: new(int), expect: new(string)}
-			log.Println(errors.Is(&e, &t))
+			//var e = SimpleDAGValueTypeError{actual: new(int), expect: new(string)}
+			//var t = SimpleDAGValueTypeError{actual: new(int), expect: new(string)}
+			//log.Println(errors.Is(&e, &t))
 			return a[0], nil
 		},
 	}, &SimpleDAGWorkflowTransit{

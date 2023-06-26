@@ -72,7 +72,7 @@ type SimpleDAGInterface[TInput, TOutput any] interface {
 
 	// BuildWorkflow builds the workflow.
 	//
-	// Input and output channels must be specified, otherwise false is returned.
+	// Input and output channels must be specified, otherwise error is returned.
 	BuildWorkflow() error
 
 	// BuildWorkflowInput builds channel(s) for inputting the execution result of the current node to the subsequent node(s).
@@ -104,7 +104,13 @@ type SimpleDAGInterface[TInput, TOutput any] interface {
 	RunOnce(input *TInput) *TOutput
 }
 
+// SimpleDAG defines a generic directed acyclic graph of proposals.
+// When you use it, you need to specify the input data type and output data type.
+//
+// Note that the input and output data types of the transit node are not mandatory,
+// you need to verify it yourself.
 type SimpleDAG[TInput, TOutput any] struct {
+	// channels stores all channels of this directed acyclic graph. The key of the map is the channel name.
 	channels         map[string]chan any
 	channelInput     string
 	channelOutput    string
@@ -113,13 +119,14 @@ type SimpleDAG[TInput, TOutput any] struct {
 	SimpleDAGInterface[TInput, TOutput]
 }
 
+// SimpleDAGValueTypeError defines that the data type output by the node is inconsistent with expectation.
 type SimpleDAGValueTypeError struct {
 	expect any
 	actual any
 }
 
 func (e *SimpleDAGValueTypeError) Error() string {
-	return fmt.Sprintf("The type of the value [%s] is inconsistent with the target [%s].", reflect.TypeOf(e.actual), reflect.TypeOf(e.actual))
+	return fmt.Sprintf("The type of the value [%s] is inconsistent with expectation [%s].", reflect.TypeOf(e.actual), reflect.TypeOf(e.actual))
 }
 
 func NewSimpleDAG[TInput, TOutput any]() *SimpleDAG[TInput, TOutput] {
@@ -167,9 +174,7 @@ func (d *SimpleDAG[TInput, TOutput]) InitWorkflow(input string, output string, t
 }
 
 func (d *SimpleDAG[TInput, TOutput]) AttachWorkflowTransit(transits ...*SimpleDAGWorkflowTransit) {
-	for _, t := range transits {
-		d.workflowTransits = append(d.workflowTransits, t)
-	}
+	d.workflowTransits = append(d.workflowTransits, transits...)
 }
 
 var ErrChannelNotExist = errors.New("the specified channel does not exist")
