@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/sync/errgroup"
 )
 
 // TestSubContext tests subcontext.
@@ -187,6 +188,33 @@ func TestWaitGroup(t *testing.T) {
 			assert.Equal(t, 1, value[i])
 		}
 		log.Println("all done")
+	})
+}
+
+func TestErrGroup(t *testing.T) {
+	root := context.Background()
+
+	t.Run("errgroup only records the first error received.", func(t *testing.T) {
+		const N = 5
+		g, _ := errgroup.WithContext(root)
+		var sub [5]bool
+		for i := 0; i < N; i++ {
+			i := i
+			g.Go(func() error {
+				sub[i] = true
+				log.Printf("sub1%d", i)
+				time.Sleep(time.Duration(i*100) * time.Millisecond)
+				return fmt.Errorf("err sub1%d", i)
+			})
+		}
+
+		// Although only the first error is recorded, it will not continue until all coroutines are executed.
+		if err := g.Wait(); err != nil {
+			assert.Equal(t, "err sub10", err.Error())
+		}
+		for _, s := range sub {
+			assert.True(t, s)
+		}
 	})
 }
 
