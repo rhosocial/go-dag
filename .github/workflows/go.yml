@@ -27,9 +27,9 @@ jobs:
         run: go mod tidy && go build -v ./...
 
       - name: Test
-        run: go test -v ./...
+        run: go test -race -v ./...
       - name: Benchmark
-        run: go test -v ./... -bench . -run ^$ -count 10 -benchmem
+        run: go test -race -v ./... -bench . -run ^$ -count 10 -benchmem
       - name: Stop containers
         if: always()
         run: docker-compose -f tests/environments/go1.20_redis7_mysql8/docker-compose.yml down
