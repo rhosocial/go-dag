@@ -34,6 +34,28 @@ func subtest(ctx context.Context, name string, doneCallback func()) {
 	}
 }
 
+func subtesterr(ctx context.Context, name string, doneCallback func()) error {
+	index := 0
+	for {
+		time.Sleep(100 * time.Millisecond)
+		index++
+		select {
+		case <-ctx.Done():
+			log.Printf("%s: %s\n", name, context.Cause(ctx))
+			if value, ok := ctx.Value("parent").(string); ok {
+				log.Printf("%s: parent:%s\n", name, value)
+			}
+			if doneCallback != nil {
+				doneCallback()
+			}
+			return ctx.Err()
+		default:
+			log.Printf("%s: %d working...\n", name, index)
+		}
+	}
+	return nil
+}
+
 // clientChan must be initialized before use
 var clientChan chan string
 

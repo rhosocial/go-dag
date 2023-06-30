@@ -208,12 +208,90 @@ func TestErrGroup(t *testing.T) {
 			})
 		}
 
-		// Although only the first error is recorded, it will not continue until all coroutines are executed.
+		// Although only the first error is recorded, it will not continue until all goroutines are executed.
+		// That is, if one of them reports an error, it will not prevent other goroutines from continuing to execute.
 		if err := g.Wait(); err != nil {
 			assert.Equal(t, "err sub10", err.Error())
 		}
 		for _, s := range sub {
 			assert.True(t, s)
+		}
+	})
+
+	// The parent context of errgroup is the context with the handle of the cancellation function.
+	t.Run("The parent context of errgroup is canceled directly.", func(t *testing.T) {
+		const N = 5
+		sub1, cancelFunc := context.WithCancel(root)
+		g, _ := errgroup.WithContext(sub1)
+		var stats [5]bool
+		for i := 0; i < N; i++ {
+			i := i
+			g.Go(func() error {
+				time.Sleep(time.Duration(i*100) * time.Millisecond)
+				stats[i] = true
+				return fmt.Errorf("err sub1%d", i)
+			})
+		}
+		// After errgroup starts all coroutines, the parent context is directly canceled without waiting for them to end.
+		cancelFunc()
+		// But this does not cause all coroutines to be undone.
+		// errgroup still records the first returned error.
+		if err := g.Wait(); err != nil {
+			assert.Equal(t, "err sub10", err.Error())
+		}
+		// and all goroutines have been executed.
+		for _, s := range stats {
+			assert.True(t, s)
+		}
+	})
+
+	// Each goroutine started by errgroup monitors the completion status of the parent context.
+	// If the context ends, the specified function is executed.
+	t.Run("errgroup with goroutine checks context done status and execute done function.", func(t *testing.T) {
+		const N = 5
+		sub1, cancelFunc := context.WithCancel(root)
+		g, _ := errgroup.WithContext(sub1)
+		var stats [5]bool
+		for i := 0; i < N; i++ {
+			i := i
+			g.Go(func() error {
+				time.Sleep(time.Duration((i+1)*100) * time.Millisecond)
+				return subtesterr(sub1, "sub1", func() {
+					stats[i] = true
+				})
+			})
+		}
+		cancelFunc()
+		if err := g.Wait(); err != nil {
+			assert.Equal(t, "context canceled", err.Error())
+		}
+		// and all done functions have been executed.
+		for _, s := range stats {
+			assert.True(t, s)
+		}
+	})
+
+	// Each goroutine started by errgroup monitors the completion status of the parent context.
+	// No function is executed after the context ends.
+	t.Run("errgroup with goroutine checks context done status without executing any done function.", func(t *testing.T) {
+		const N = 5
+		sub1, cancelFunc := context.WithCancel(root)
+		g, _ := errgroup.WithContext(sub1)
+		var stats [5]bool
+		for i := 0; i < N; i++ {
+			i := i
+			g.Go(func() error {
+				time.Sleep(time.Duration((i+1)*100) * time.Millisecond)
+				return subtesterr(sub1, "sub1", nil)
+			})
+		}
+		cancelFunc()
+		if err := g.Wait(); err != nil {
+			assert.Equal(t, "context canceled", err.Error())
+		}
+		// and no done functions have been executed.
+		for _, s := range stats {
+			assert.False(t, s)
 		}
 	})
 }
