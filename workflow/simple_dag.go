@@ -44,10 +44,7 @@ type SimpleDAGWorkflowTransit struct {
 	worker func(...any) (any, error)
 }
 
-// SimpleDAGInterface defines a set of methods that a simple DAG should implement.
-//
-// TInput represents the input data type, and TOutput represents the output data type.
-type SimpleDAGInterface[TInput, TOutput any] interface {
+type SimpleDAGInitInterface interface {
 	// InitChannels initializes the channels that the workflow should have. All channels are unbuffered.
 	//
 	// The parameter is the channel name and cannot be repeated.
@@ -69,7 +66,13 @@ type SimpleDAGInterface[TInput, TOutput any] interface {
 
 	// AttachWorkflowTransit attaches additional transit node of workflow.
 	AttachWorkflowTransit(...*SimpleDAGWorkflowTransit)
+}
 
+// SimpleDAGInterface defines a set of methods that a simple DAG should implement.
+//
+// TInput represents the input data type, and TOutput represents the output data type.
+type SimpleDAGInterface[TInput, TOutput any] interface {
+	SimpleDAGInitInterface
 	// BuildWorkflow builds the workflow.
 	//
 	// Input and output channels must be specified, otherwise error is returned.
