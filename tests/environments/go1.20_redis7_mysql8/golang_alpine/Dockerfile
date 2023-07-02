@@ -13,4 +13,4 @@ COPY go.mod go.sum main.go main_test.go ./
 RUN go mod tidy
 RUN go build
 
-CMD ["./go-rush-producer"]
+CMD ["./go-dag"]
