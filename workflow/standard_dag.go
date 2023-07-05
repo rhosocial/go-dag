@@ -72,6 +72,25 @@ func (d *StandardDAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error 
 	return nil
 }
 
+func (d *StandardDAG[TInput, TOutput]) CloseWorkflow() {
+	if len(d.channelInput) == 0 {
+		return
+	}
+	close(d.channels[d.channelInput])
+	if len(d.channelOutput) == 0 {
+		return
+	}
+	//close(d.channels[d.channelOutput])
+	if len(d.workflowTransits) == 0 {
+		return
+	}
+	for _, t := range d.workflowTransits {
+		for _, c := range t.channelOutputs {
+			close(d.channels[c])
+		}
+	}
+}
+
 func (d *StandardDAG[TInput, TOutput]) Execute(ctx context.Context, input *TInput) *TOutput {
 	err := d.BuildWorkflow(ctx)
 	if err != nil {
