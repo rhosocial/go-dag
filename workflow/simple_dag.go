@@ -99,7 +99,12 @@ type SimpleDAGInterface[TInput, TOutput any] interface {
 
 	// Execute builds the workflow and executes it.
 	//
-	// Note: all channels will not be closed after this method is executed, that is, you can execute it again and again.
+	// Note:
+	// 1. All channels will not be closed after this method is executed, that is, you can execute it again and again.
+	// 2. If the current task execution of a node has not ended, but the next task has ended,
+	//    the output of the next task will enter the execution flow of the subsequent task.
+	//    Therefore, you need to ensure that the order of execution will not be disordered in the middle.
+	//    Otherwise, unexpected results may be obtained.
 	Execute(input *TInput) *TOutput
 
 	// RunOnce executes the workflow only once. All channels are closed after execution.
@@ -243,6 +248,8 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflow() error {
 			if err != nil {
 				d.logger.Printf("worker[%s] error(s) occurred: %s\n", t.name, err.Error())
 			}
+			// Note: If the execution of this task has not yet ended, but the next task has ended,
+			// the output of the next task will enter the execution flow of this subsequent task.
 			d.BuildWorkflowInput(result, t.channelOutputs...)
 		}(t)
 	}
