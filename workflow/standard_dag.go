@@ -16,13 +16,18 @@ type StandardDAGInterface[TInput, TOutput any] interface {
 	RunOnce(ctx context.Context, input *TInput) *TOutput
 }
 
-type StandardDAG[TInput, TOutput any] struct {
+type StandardDAGChannel struct {
+	Prefix string
 	// channels stores all channels of this directed acyclic graph. The key of the map is the channel name.
-	channels         map[string]chan any
-	channelInput     string
-	channelOutput    string
+	channels      map[string]chan any
+	channelInput  string
+	channelOutput string
+}
+
+type StandardDAG[TInput, TOutput any] struct {
 	workflowTransits []*SimpleDAGWorkflowTransit
 	logger           *log.Logger
+	StandardDAGChannel
 	StandardDAGInterface[TInput, TOutput]
 }
 
