@@ -53,7 +53,6 @@ func subtesterr(ctx context.Context, name string, doneCallback func()) error {
 			log.Printf("%s: %d working...\n", name, index)
 		}
 	}
-	return nil
 }
 
 // clientChan must be initialized before use
