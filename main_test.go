@@ -134,6 +134,54 @@ func TestNestedContextWithValue(t *testing.T) {
 	})
 }
 
+func TestNestedContextWithSiblings(t *testing.T) {
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+	root := context.Background()
+
+	// The current node is cancelled, and sibling nodes are not affected.
+	t.Run("sibling canceled", func(t *testing.T) {
+		sub1 := context.WithValue(root, "parent", "root")
+		sub11, _ := context.WithCancel(sub1)
+		sub12, cancel12 := context.WithCancel(sub1)
+		go subtest(sub11, "sub11", nil)
+		go subtest(sub12, "sub12", nil)
+		cancel12()
+		time.Sleep(time.Second)
+	})
+
+	// The current node is canceled and all sibling nodes are notified to cancel.
+	t.Run("the current canceled, and notify the siblings to cancel", func(t *testing.T) {
+		sub1 := context.WithValue(root, "parent", "root")
+		sub11, cancel11 := context.WithCancel(sub1)
+		sub12, cancel12 := context.WithCancel(sub1)
+		go subtest(sub11, "sub11", nil)
+		go subtest(sub12, "sub12", func() { cancel11() })
+		time.Sleep(time.Millisecond * 100)
+		cancel12()
+		time.Sleep(time.Second)
+	})
+
+	t.Run("the current canceled, and notify the siblings and their children to cancel", func(t *testing.T) {
+		sub1 := context.WithValue(root, "parent", "root")
+		sub11, cancel11 := context.WithCancel(sub1)
+		sub12, cancel12 := context.WithCancel(sub11)
+		sub21, cancel21 := context.WithCancel(sub1)
+		sub22, cancel22 := context.WithCancel(sub21)
+		cancel := func() {
+			cancel11()
+			cancel21()
+		}
+		go subtest(sub11, "sub11", cancel)
+		go subtest(sub12, "sub12", func() { cancel12() })
+		go subtest(sub21, "sub21", cancel)
+		go subtest(sub22, "sub22", func() { cancel21() })
+		time.Sleep(time.Millisecond * 100)
+		cancel22()
+		time.Sleep(time.Second)
+
+	})
+}
+
 func TestWaitGroup(t *testing.T) {
 	root := context.Background()
 
