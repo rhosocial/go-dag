@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"context"
 	"log"
 	"strconv"
 	"testing"
@@ -63,14 +64,15 @@ func NewDAGTwoParallelTransits() *DAGTwoParallelTransits {
 
 func TestDAGTwoParallelTransits(t *testing.T) {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+	root := context.Background()
 	t.Run("run successfully", func(t *testing.T) {
 		f := NewDAGTwoParallelTransits()
 		var input = "test"
 		for i := 0; i < 5; i++ {
-			var results = f.Execute(&input)
+			var results = f.Execute(root, &input)
 			assert.Equal(t, "0test1test", *results)
 		}
-		var results = f.RunOnce(&input)
+		var results = f.RunOnce(root, &input)
 		assert.Equal(t, "0test1test", *results)
 	})
 
@@ -78,7 +80,7 @@ func TestDAGTwoParallelTransits(t *testing.T) {
 		defer func() { recover() }()
 		f := NewDAGTwoParallelTransits()
 		var input = "test"
-		var results = f.RunOnce(&input)
+		var results = f.RunOnce(root, &input)
 		assert.Equal(t, "0test1test", *results)
 		// f.RunOnce(&input)
 	})

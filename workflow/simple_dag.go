@@ -5,6 +5,7 @@
 package workflow
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -34,6 +35,7 @@ type SimpleDAGWorkflowTransit struct {
 	channelOutputs []string
 
 	// worker represents the working method of this node. worker can return error, but error are not passed on to subsequent nodes.
+	// If the worker returns an error other than nil, the workflow will be canceled directly.
 	//
 	// It is strongly discouraged to panic() in the worker, as this will cause the process to abort and cannot be recovered.
 	//
@@ -42,6 +44,12 @@ type SimpleDAGWorkflowTransit struct {
 	//
 	// You need to ensure the correctness of the parameter and return value types by yourself, otherwise it will panic.
 	worker func(...any) (any, error)
+
+	// isRunning indicates that the worker is working.
+	isRunning bool
+
+	// mu indicates that the channelInputs, channelOutputs and worker are being accessed.
+	mu sync.RWMutex
 }
 
 type SimpleDAGInitInterface interface {
@@ -76,20 +84,20 @@ type SimpleDAGInterface[TInput, TOutput any] interface {
 	// BuildWorkflow builds the workflow.
 	//
 	// Input and output channels must be specified, otherwise error is returned.
-	BuildWorkflow() error
+	BuildWorkflow(ctx context.Context) error
 
 	// BuildWorkflowInput builds channel(s) for inputting the execution result of the current node to the subsequent node(s).
 	//
 	// Among the parameters, result is the content to be input to subsequent node(s).
 	// inputs is the name of the channels that receive the content.
 	// You should check that the channel exists before calling this method, otherwise it will panic.
-	BuildWorkflowInput(result any, inputs ...string)
+	BuildWorkflowInput(ctx context.Context, result any, inputs ...string)
 
 	// BuildWorkflowOutput builds a set of channels for receiving execution results of predecessor nodes.
 	//
 	// outputs is the name of the channels that content will send to in order.
 	// You should check that the channel exists before calling this method, otherwise it will panic.
-	BuildWorkflowOutput(outputs ...string) *[]any
+	BuildWorkflowOutput(ctx context.Context, outputs ...string) *[]any
 
 	// CloseWorkflow closes all channels after workflow execution.
 	//
@@ -105,11 +113,20 @@ type SimpleDAGInterface[TInput, TOutput any] interface {
 	//    the output of the next task will enter the execution flow of the subsequent task.
 	//    Therefore, you need to ensure that the order of execution will not be disordered in the middle.
 	//    Otherwise, unexpected results may be obtained.
-	Execute(input *TInput) *TOutput
+	Execute(ctx context.Context, input *TInput) *TOutput
 
 	// RunOnce executes the workflow only once. All channels are closed after execution.
 	// If you want to re-execute, you need to re-create the workflow instance. (call NewSimpleDAG)
-	RunOnce(input *TInput) *TOutput
+	RunOnce(ctx context.Context, input *TInput) *TOutput
+}
+
+type SimpleDAGChannel struct {
+	// channels stores all channels of this directed acyclic graph. The key of the map is the channel name.
+	channels map[string]chan any
+	// channelInput defines the channel used for input. Currently only a single input channel is supported.
+	channelInput string
+	// channelOutput defines the channel used for output. Currently only a single output channel is supported.
+	channelOutput string
 }
 
 // SimpleDAG defines a generic directed acyclic graph of proposals.
@@ -118,12 +135,9 @@ type SimpleDAGInterface[TInput, TOutput any] interface {
 // Note that the input and output data types of the transit node are not mandatory,
 // you need to verify it yourself.
 type SimpleDAG[TInput, TOutput any] struct {
-	// channels stores all channels of this directed acyclic graph. The key of the map is the channel name.
-	channels         map[string]chan any
-	channelInput     string
-	channelOutput    string
 	workflowTransits []*SimpleDAGWorkflowTransit
 	logger           *log.Logger
+	SimpleDAGChannel
 	SimpleDAGInterface[TInput, TOutput]
 }
 
@@ -187,7 +201,7 @@ func (d *SimpleDAG[TInput, TOutput]) AttachWorkflowTransit(transits ...*SimpleDA
 
 var ErrChannelNotExist = errors.New("the specified channel does not exist")
 
-func (d *SimpleDAG[TInput, TOutput]) BuildWorkflowInput(result any, inputs ...string) {
+func (d *SimpleDAG[TInput, TOutput]) BuildWorkflowInput(ctx context.Context, result any, inputs ...string) {
 	for _, next := range inputs {
 		next := next
 		go func(next string) {
@@ -196,16 +210,27 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflowInput(result any, inputs ...st
 	}
 }
 
-func (d *SimpleDAG[TInput, TOutput]) BuildWorkflowOutput(outputs ...string) *[]any {
+func (d *SimpleDAG[TInput, TOutput]) BuildWorkflowOutput(ctx context.Context, outputs ...string) *[]any {
 	var count = len(outputs)
 	var results = make([]any, count)
 	var wg sync.WaitGroup
 	wg.Add(count)
 	for i, name := range outputs {
-		go func(i int, name string) {
+		go func(ctx context.Context, i int, name string) {
 			defer wg.Done()
-			results[i] = <-d.channels[name]
-		}(i, name)
+			flag := false
+			for {
+				if flag {
+					break
+				}
+				select {
+				case results[i] = <-d.channels[name]:
+					flag = true
+				case <-ctx.Done():
+					flag = true
+				}
+			}
+		}(ctx, i, name)
 	}
 	wg.Wait()
 	return &results
@@ -214,7 +239,7 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflowOutput(outputs ...string) *[]a
 var ErrChannelInputEmpty = errors.New("the input channel is empty")
 var ErrChannelOutputEmpty = errors.New("the output channel is empty")
 
-func (d *SimpleDAG[TInput, TOutput]) BuildWorkflow() error {
+func (d *SimpleDAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 	// Build Input
 	if len(d.channelInput) == 0 {
 		return ErrChannelInputEmpty
@@ -241,17 +266,24 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflow() error {
 			}
 		}
 	}
+
 	for _, t := range d.workflowTransits {
-		go func(t *SimpleDAGWorkflowTransit) {
-			results := d.BuildWorkflowOutput(t.channelInputs...)
+		go func(ctx context.Context, t *SimpleDAGWorkflowTransit) {
+			results := d.BuildWorkflowOutput(ctx, t.channelInputs...)
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
 			var result, err = t.worker(*results...)
 			if err != nil {
 				d.logger.Printf("worker[%s] error(s) occurred: %s\n", t.name, err.Error())
+				return
 			}
 			// Note: If the execution of this task has not yet ended, but the next task has ended,
 			// the output of the next task will enter the execution flow of this subsequent task.
-			d.BuildWorkflowInput(result, t.channelOutputs...)
-		}(t)
+			d.BuildWorkflowInput(ctx, result, t.channelOutputs...)
+		}(ctx, t)
 	}
 	return nil
 }
@@ -275,8 +307,8 @@ func (d *SimpleDAG[TInput, TOutput]) CloseWorkflow() {
 	}
 }
 
-func (d *SimpleDAG[TInput, TOutput]) Execute(input *TInput) *TOutput {
-	err := d.BuildWorkflow()
+func (d *SimpleDAG[TInput, TOutput]) Execute(ctx context.Context, input *TInput) *TOutput {
+	err := d.BuildWorkflow(ctx)
 	if err != nil {
 		return nil
 	}
@@ -285,7 +317,7 @@ func (d *SimpleDAG[TInput, TOutput]) Execute(input *TInput) *TOutput {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		r := d.BuildWorkflowOutput(d.channelOutput)
+		r := d.BuildWorkflowOutput(ctx, d.channelOutput)
 		if r, ok := (*r)[0].(TOutput); !ok {
 			t := new(TOutput)
 			var e = SimpleDAGValueTypeError{actual: r, expect: t}
@@ -296,12 +328,12 @@ func (d *SimpleDAG[TInput, TOutput]) Execute(input *TInput) *TOutput {
 			results = &r
 		}
 	}()
-	d.BuildWorkflowInput(*input, d.channelInput)
+	d.BuildWorkflowInput(ctx, *input, d.channelInput)
 	wg.Wait()
 	return results
 }
 
-func (d *SimpleDAG[TInput, TOutput]) RunOnce(input *TInput) *TOutput {
+func (d *SimpleDAG[TInput, TOutput]) RunOnce(ctx context.Context, input *TInput) *TOutput {
 	defer d.CloseWorkflow()
-	return d.Execute(input)
+	return d.Execute(ctx, input)
 }
