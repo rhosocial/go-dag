@@ -344,6 +344,30 @@ func TestErrGroup(t *testing.T) {
 	})
 }
 
+func TestExitAfterBeingNotified(t *testing.T) {
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+	c := make(chan int)
+	go func() {
+		log.Println("channel input")
+		time.Sleep(time.Second)
+		c <- 10
+		// close(c)
+	}()
+	b := false
+	for {
+		if b {
+			log.Println("exiting...")
+			break
+		}
+		select {
+		case x, ok := <-c:
+			b = true
+			assert.True(t, ok)
+			assert.Equal(t, 10, x)
+		}
+	}
+}
+
 func TestProduceAndConsume(t *testing.T) {
 	// Since there is no consumer listening to the channel during production, a buffer must be set for the channel,
 	// otherwise it will block for a long time because there is no consumer and eventually lead to deadlock.
