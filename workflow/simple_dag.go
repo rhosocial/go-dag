@@ -120,6 +120,7 @@ type SimpleDAGInterface[TInput, TOutput any] interface {
 	RunOnce(ctx context.Context, input *TInput) *TOutput
 }
 
+// SimpleDAGChannel defines the channels used by this directed acyclic graph.
 type SimpleDAGChannel struct {
 	// channels stores all channels of this directed acyclic graph. The key of the map is the channel name.
 	channels map[string]chan any
@@ -127,6 +128,53 @@ type SimpleDAGChannel struct {
 	channelInput string
 	// channelOutput defines the channel used for output. Currently only a single output channel is supported.
 	channelOutput string
+	// mu indicates that the channels field is being accessed.
+	mu sync.RWMutex
+}
+
+func NewSimpleDAGChannel() *SimpleDAGChannel {
+	return &SimpleDAGChannel{
+		channels: make(map[string]chan any),
+	}
+}
+
+func (d *SimpleDAGChannel) exists(name string) bool {
+	if _, existed := d.channels[name]; existed {
+		return true
+	}
+	return false
+}
+
+type ErrDAGChannelNameExisted struct {
+	name string
+	error
+}
+
+func (e *ErrDAGChannelNameExisted) Error() string {
+	return fmt.Sprintf("the channel[%s] has existed.", e.name)
+}
+
+func (d *SimpleDAGChannel) Add(names ...string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, v := range names {
+		v := v
+		if d.exists(v) {
+			return &ErrDAGChannelNameExisted{name: v}
+		}
+	}
+	// Can only be added after all checks are passed.
+	for _, v := range names {
+		v := v
+		d.channels[v] = make(chan any)
+	}
+	return nil
+}
+
+func (d *SimpleDAGChannel) Exists(name string) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.Exists(name)
 }
 
 // SimpleDAG defines a generic directed acyclic graph of proposals.
@@ -161,25 +209,15 @@ func (d *SimpleDAG[TInput, TOutput]) InitChannels(channels ...string) {
 	if channels == nil || len(channels) == 0 {
 		return
 	}
-	d.channels = make(map[string]chan any, len(channels))
-	for _, v := range channels {
-		v := v
-		d.channels[v] = make(chan any)
-	}
+	d.SimpleDAGChannel = *NewSimpleDAGChannel()
+	d.SimpleDAGChannel.Add(channels...)
 }
 
 func (d *SimpleDAG[TInput, TOutput]) AttachChannels(channels ...string) {
 	if channels == nil || len(channels) == 0 {
 		return
 	}
-	if d.channels == nil || len(d.channels) == 0 {
-		d.InitChannels(channels...)
-		return
-	}
-	for _, v := range channels {
-		v := v
-		d.channels[v] = make(chan any)
-	}
+	d.SimpleDAGChannel.Add(channels...)
 }
 
 func (d *SimpleDAG[TInput, TOutput]) InitWorkflow(input string, output string, transits ...*SimpleDAGWorkflowTransit) {
@@ -275,6 +313,12 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 				return
 			default:
 			}
+			d.mu.Lock()
+			defer d.mu.Unlock()
+			t.isRunning = true
+			defer func(t *SimpleDAGWorkflowTransit) {
+				t.isRunning = false
+			}(t)
 			var result, err = t.worker(*results...)
 			if err != nil {
 				d.logger.Printf("worker[%s] error(s) occurred: %s\n", t.name, err.Error())
