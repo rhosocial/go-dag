@@ -26,12 +26,16 @@ type SimpleDAGWorkflowTransit struct {
 	// All channels are listened to when building a workflow.
 	// The transit node will only be executed when all channels have passed in values.
 	// Therefore, at least one channel must be specified.
+	//
+	// Note: Since each channel is unbuffered, it is strongly recommended to use each channel only once.
 	channelInputs []string
 
 	// channelOutputs defines the output channel names required by this transit node.
 	//
 	// The results of the execution of the transit node will be sequentially sent to the designated output channel,
 	// so that the subsequent node can continue to execute. Therefore, at least one channel must be specified.
+	//
+	// Note: Since each channel is unbuffered, it is strongly recommended to use each channel only once.
 	channelOutputs []string
 
 	// worker represents the working method of this node. worker can return error, but error are not passed on to subsequent nodes.
@@ -49,7 +53,8 @@ type SimpleDAGWorkflowTransit struct {
 	isRunning bool
 
 	// mu indicates that the channelInputs, channelOutputs and worker are being accessed.
-	mu sync.RWMutex
+	// It doesn't seem to be useful.
+	// mu sync.RWMutex
 }
 
 type SimpleDAGInitInterface interface {
@@ -96,7 +101,16 @@ type SimpleDAGInterface[TInput, TOutput any] interface {
 	// BuildWorkflowOutput builds a set of channels for receiving execution results of predecessor nodes.
 	//
 	// outputs is the name of the channels that content will send to in order.
+	// Only when all channels specified by outputs have received data will the result be returned.
+	// That is, as long as there is a channel that has not received data, the method will always be blocked.
+	// The returned result is an array, the number of array elements is consistent with outputs,
+	// and the results of its elements are in the order specified by outputs.
 	// You should check that the channel exists before calling this method, otherwise it will panic.
+	//
+	// In particular, when ctx receives the end notification, it will return immediately,
+	// but the content returned at this time is incomplete.
+	// Therefore, you need to check the state of ctx immediately after receiving the return value of this method.
+	// If the ctx status is `Done()`, the data returned by this method is not available.
 	BuildWorkflowOutput(ctx context.Context, outputs ...string) *[]any
 
 	// CloseWorkflow closes all channels after workflow execution.
@@ -106,13 +120,12 @@ type SimpleDAGInterface[TInput, TOutput any] interface {
 	CloseWorkflow()
 
 	// Execute builds the workflow and executes it.
-	//
-	// Note:
-	// 1. All channels will not be closed after this method is executed, that is, you can execute it again and again.
-	// 2. If the current task execution of a node has not ended, but the next task has ended,
-	//    the output of the next task will enter the execution flow of the subsequent task.
-	//    Therefore, you need to ensure that the order of execution will not be disordered in the middle.
-	//    Otherwise, unexpected results may be obtained.
+	// All channels will not be closed after this method is executed, that is, you can execute it again and again.
+	// But this method can only be executed once at a time.
+	// If this method is called before the last call is completed, the call will be blocked until the last execution ends.
+	// That is, pipelined execution is not supported.
+	// If you want to execute multiple times simultaneously without blocking,
+	// you should newly instantiate multiple SimpleDAG instances and execute them separately.
 	Execute(ctx context.Context, input *TInput) *TOutput
 
 	// RunOnce executes the workflow only once. All channels are closed after execution.
@@ -174,7 +187,24 @@ func (d *SimpleDAGChannel) Add(names ...string) error {
 func (d *SimpleDAGChannel) Exists(name string) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.Exists(name)
+	return d.exists(name)
+}
+
+type SimpleDAGContextInterface interface {
+	Cancel(cause error)
+}
+
+// SimpleDAGContext defines the context, and the context must support cancellation reasons.
+// When a node in the workflow reports an error during execution, the cancel function will be called to notify all nodes
+// in the workflow to cancel the execution.
+type SimpleDAGContext struct {
+	context context.Context
+	cancel  context.CancelCauseFunc
+	SimpleDAGContextInterface
+}
+
+func (d *SimpleDAGContext) Cancel(cause error) {
+	d.cancel(cause)
 }
 
 // SimpleDAG defines a generic directed acyclic graph of proposals.
@@ -186,6 +216,7 @@ type SimpleDAG[TInput, TOutput any] struct {
 	workflowTransits []*SimpleDAGWorkflowTransit
 	logger           *log.Logger
 	SimpleDAGChannel
+	SimpleDAGContext
 	SimpleDAGInterface[TInput, TOutput]
 }
 
@@ -193,6 +224,7 @@ type SimpleDAG[TInput, TOutput any] struct {
 type SimpleDAGValueTypeError struct {
 	expect any
 	actual any
+	error
 }
 
 func (e *SimpleDAGValueTypeError) Error() string {
@@ -205,19 +237,16 @@ func NewSimpleDAG[TInput, TOutput any]() *SimpleDAG[TInput, TOutput] {
 	}
 }
 
-func (d *SimpleDAG[TInput, TOutput]) InitChannels(channels ...string) {
-	if channels == nil || len(channels) == 0 {
-		return
-	}
+func (d *SimpleDAG[TInput, TOutput]) InitChannels(channels ...string) error {
 	d.SimpleDAGChannel = *NewSimpleDAGChannel()
-	d.SimpleDAGChannel.Add(channels...)
+	return d.AttachChannels(channels...)
 }
 
-func (d *SimpleDAG[TInput, TOutput]) AttachChannels(channels ...string) {
+func (d *SimpleDAG[TInput, TOutput]) AttachChannels(channels ...string) error {
 	if channels == nil || len(channels) == 0 {
-		return
+		return nil
 	}
-	d.SimpleDAGChannel.Add(channels...)
+	return d.SimpleDAGChannel.Add(channels...)
 }
 
 func (d *SimpleDAG[TInput, TOutput]) InitWorkflow(input string, output string, transits ...*SimpleDAGWorkflowTransit) {
@@ -309,23 +338,26 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 		go func(ctx context.Context, t *SimpleDAGWorkflowTransit) {
 			results := d.BuildWorkflowOutput(ctx, t.channelInputs...)
 			select {
-			case <-ctx.Done():
+			case <-ctx.Done(): // If the end notification has been received, it will exit directly without notifying the worker to work.
 				return
 			default:
 			}
-			d.mu.Lock()
-			defer d.mu.Unlock()
-			t.isRunning = true
-			defer func(t *SimpleDAGWorkflowTransit) {
-				t.isRunning = false
-			}(t)
-			var result, err = t.worker(*results...)
+			var work = func(t *SimpleDAGWorkflowTransit) (any, error) {
+				// It doesn't seem to be useful.
+				// t.mu.Lock()
+				// defer t.mu.Unlock()
+				t.isRunning = true
+				defer func(t *SimpleDAGWorkflowTransit) {
+					t.isRunning = false
+				}(t)
+				return t.worker(*results...)
+			}
+			var result, err = work(t)
 			if err != nil {
 				d.logger.Printf("worker[%s] error(s) occurred: %s\n", t.name, err.Error())
+				d.SimpleDAGContext.Cancel(err)
 				return
 			}
-			// Note: If the execution of this task has not yet ended, but the next task has ended,
-			// the output of the next task will enter the execution flow of this subsequent task.
 			d.BuildWorkflowInput(ctx, result, t.channelOutputs...)
 		}(ctx, t)
 	}
@@ -352,6 +384,10 @@ func (d *SimpleDAG[TInput, TOutput]) CloseWorkflow() {
 }
 
 func (d *SimpleDAG[TInput, TOutput]) Execute(ctx context.Context, input *TInput) *TOutput {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	root, cancel := context.WithCancelCause(ctx)
+	d.SimpleDAGContext = SimpleDAGContext{context: root, cancel: cancel}
 	err := d.BuildWorkflow(ctx)
 	if err != nil {
 		return nil

@@ -85,3 +85,7 @@ func TestDAGTwoParallelTransits(t *testing.T) {
 		// f.RunOnce(&input)
 	})
 }
+
+func TestSimpleDAG_InitChannels(t *testing.T) {
+	//root := context.Background()
+}
