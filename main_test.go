@@ -141,7 +141,8 @@ func TestNestedContextWithSiblings(t *testing.T) {
 	// The current node is cancelled, and sibling nodes are not affected.
 	t.Run("sibling canceled", func(t *testing.T) {
 		sub1 := context.WithValue(root, "parent", "root")
-		sub11, _ := context.WithCancel(sub1)
+		sub11, cancel11 := context.WithCancel(sub1)
+		defer cancel11() // The cancel handler must be called here, otherwise it will cause a leak and affect the accuracy of other tests.
 		sub12, cancel12 := context.WithCancel(sub1)
 		go subtest(sub11, "sub11", nil)
 		go subtest(sub12, "sub12", nil)
