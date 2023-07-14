@@ -161,7 +161,7 @@ func NewDAGThreeParallelDelayedTransits() *DAGParallelTransits {
 func TestSimpleDAGContext_Cancel(t *testing.T) {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 	root := context.Background()
-	t.Run("", func(t *testing.T) {
+	t.Run("normal case", func(t *testing.T) {
 		f := NewDAGThreeParallelDelayedTransits()
 		var input = "test"
 		var results = f.RunOnce(root, &input)

@@ -376,6 +376,8 @@ func (d *SimpleDAG[TInput, TOutput]) CloseWorkflow() {
 	if len(d.workflowTransits) == 0 {
 		return
 	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	for _, t := range d.workflowTransits {
 		for _, c := range t.channelOutputs {
 			close(d.channels[c])
