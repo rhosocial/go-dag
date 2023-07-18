@@ -228,7 +228,7 @@ type SimpleDAGValueTypeError struct {
 }
 
 func (e *SimpleDAGValueTypeError) Error() string {
-	return fmt.Sprintf("The type of the value [%s] is inconsistent with expectation [%s].", reflect.TypeOf(e.actual), reflect.TypeOf(e.actual))
+	return fmt.Sprintf("The type of the value [%s] is inconsistent with expectation [%s].", reflect.TypeOf(e.actual), reflect.TypeOf(e.expect))
 }
 
 func NewSimpleDAG[TInput, TOutput any]() *SimpleDAG[TInput, TOutput] {
