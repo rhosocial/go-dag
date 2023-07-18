@@ -122,8 +122,18 @@ func TestDAGTwoParallelTransits(t *testing.T) {
 	})
 }
 
-func TestSimpleDAG_InitChannels(t *testing.T) {
-	//root := context.Background()
+func BenchmarkDAGTwoParallelTransits(t *testing.B) {
+	root := context.Background()
+	t.Run("run successfully", func(t *testing.B) {
+		f := NewDAGTwoParallelTransits()
+		var input = "test"
+		for i := 0; i < 5; i++ {
+			var results = f.Execute(root, &input)
+			assert.Equal(t, "0test1test", *results)
+		}
+		var results = f.RunOnce(root, &input)
+		assert.Equal(t, "0test1test", *results)
+	})
 }
 
 var DAGThreeParallerlDelayedWorkflowTransits = []*SimpleDAGWorkflowTransit{
