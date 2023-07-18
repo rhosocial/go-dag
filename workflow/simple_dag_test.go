@@ -14,6 +14,41 @@ type DAGParallelTransits struct {
 	SimpleDAG[string, string]
 }
 
+func TestSimpleDAGChannel_Exists(t *testing.T) {
+	f := DAGParallelTransits{
+		SimpleDAG: *NewSimpleDAG[string, string](),
+	}
+	assert.False(t, f.Exists("input"))
+	assert.False(t, f.Exists("output"))
+	f.InitChannels("input", "output")
+	assert.True(t, f.Exists("input"))
+	assert.True(t, f.Exists("output"))
+}
+
+func TestSimpleDAGValueTypeError_Error(t *testing.T) {
+	f := DAGParallelTransits{
+		SimpleDAG: *NewSimpleDAG[string, string](),
+	}
+	f.InitChannels("input", "t11", "output")
+	f.InitWorkflow("input", "output", &SimpleDAGWorkflowTransit{
+		name:           "input",
+		channelInputs:  []string{"input"},
+		channelOutputs: []string{"t11"},
+		worker: func(a ...any) (any, error) {
+			return a[0], nil
+		},
+	}, &SimpleDAGWorkflowTransit{
+		name:           "output",
+		channelInputs:  []string{"t11"},
+		channelOutputs: []string{"output"},
+		worker: func(a ...any) (any, error) {
+			return 0, nil
+		},
+	})
+	input := "input"
+	assert.Nil(t, f.RunOnce(context.Background(), &input))
+}
+
 // NewDAGTwoParallelTransits defines a workflow.
 func NewDAGTwoParallelTransits() *DAGParallelTransits {
 	f := DAGParallelTransits{
