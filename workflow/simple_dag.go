@@ -403,7 +403,7 @@ func (d *SimpleDAG[TInput, TOutput]) Execute(ctx context.Context, input *TInput)
 		if r, ok := (*r)[0].(TOutput); !ok {
 			t := new(TOutput)
 			var e = SimpleDAGValueTypeError{actual: r, expect: t}
-			d.logger.Println(e)
+			d.logger.Println(e.Error())
 			results = nil
 		} else {
 			results = &r
