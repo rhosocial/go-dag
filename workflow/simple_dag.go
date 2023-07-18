@@ -285,16 +285,13 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflowOutput(ctx context.Context, ou
 	for i, name := range outputs {
 		go func(ctx context.Context, i int, name string) {
 			defer wg.Done()
-			flag := false
-			for {
-				if flag {
-					break
-				}
+			flag := true
+			for flag {
 				select {
 				case results[i] = <-d.channels[name]:
-					flag = true
+					flag = false
 				case <-ctx.Done():
-					flag = true
+					flag = false
 				}
 			}
 		}(ctx, i, name)
