@@ -343,6 +343,11 @@ func TestErrGroup(t *testing.T) {
 			assert.False(t, s)
 		}
 	})
+
+	// One of the goroutines in the errgroup reports an error and notifies the other goroutines to abort.
+	t.Run("One of the goroutines in the errgroup reports an error and notifies the other goroutines to abort.", func(t *testing.T) {
+		const N = 5
+	})
 }
 
 func TestExitAfterBeingNotified(t *testing.T) {
@@ -876,9 +881,7 @@ func TestSelectCaseReturning(t *testing.T) {
 			defer func() {
 				signalText = "exited"
 			}()
-			defer func() {
-				wg.Done()
-			}()
+			defer wg.Done()
 			for {
 				select {
 				case <-signal:
