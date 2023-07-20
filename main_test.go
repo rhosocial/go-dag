@@ -855,10 +855,10 @@ func TestDAGTwoParallelTransits(t *testing.T) {
 func TestSelectCaseReturning(t *testing.T) {
 	t.Run("for-loop case", func(t *testing.T) {
 		signal := make(chan struct{})
-		signalText := ""
+		signalText := make(chan string)
 		go func() {
 			defer func() {
-				signalText = "exited"
+				signalText <- "exited"
 			}()
 			for {
 				select {
@@ -870,16 +870,16 @@ func TestSelectCaseReturning(t *testing.T) {
 		}()
 		time.Sleep(time.Second)
 		signal <- struct{}{}
-		assert.Equal(t, "exited", signalText)
+		assert.Equal(t, "exited", <-signalText)
 	})
 	t.Run("wait-group normal case", func(t *testing.T) {
 		signal := make(chan struct{})
-		signalText := ""
+		signalText := make(chan string)
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() {
 			defer func() {
-				signalText = "exited"
+				signalText <- "exited"
 			}()
 			defer wg.Done()
 			for {
@@ -892,6 +892,6 @@ func TestSelectCaseReturning(t *testing.T) {
 		}()
 		signal <- struct{}{}
 		wg.Wait()
-		assert.Equal(t, "exited", signalText)
+		assert.Equal(t, "exited", <-signalText)
 	})
 }
