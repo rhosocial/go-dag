@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"context"
+	"errors"
 	"log"
 	"strconv"
 	"testing"
@@ -10,12 +11,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type DAGParallelTransits struct {
+type SimpleDAG1 struct {
 	SimpleDAG[string, string]
 }
 
 func TestSimpleDAGChannel_Exists(t *testing.T) {
-	f := DAGParallelTransits{
+	f := SimpleDAG1{
 		SimpleDAG: *NewSimpleDAG[string, string](),
 	}
 	assert.False(t, f.Exists("input"))
@@ -26,7 +27,7 @@ func TestSimpleDAGChannel_Exists(t *testing.T) {
 }
 
 func TestSimpleDAGValueTypeError_Error(t *testing.T) {
-	f := DAGParallelTransits{
+	f := SimpleDAG1{
 		SimpleDAG: *NewSimpleDAG[string, string](),
 	}
 	f.InitChannels("input", "t11", "output")
@@ -50,8 +51,8 @@ func TestSimpleDAGValueTypeError_Error(t *testing.T) {
 }
 
 // NewDAGTwoParallelTransits defines a workflow.
-func NewDAGTwoParallelTransits() *DAGParallelTransits {
-	f := DAGParallelTransits{
+func NewDAGTwoParallelTransits() *SimpleDAG1 {
+	f := SimpleDAG1{
 		SimpleDAG: *NewSimpleDAG[string, string](),
 	}
 	f.InitChannels("input", "t11", "t12", "t21", "t22", "output")
@@ -191,9 +192,67 @@ var DAGThreeParallerlDelayedWorkflowTransits = []*SimpleDAGWorkflowTransit{
 	},
 }
 
+var DAGOneStraightPipeline = []*SimpleDAGWorkflowTransit{
+	{
+		name:           "input",
+		channelInputs:  []string{"input"},
+		channelOutputs: []string{"t11"},
+		worker: func(a ...any) (any, error) {
+			log.Println("input...")
+			time.Sleep(time.Second)
+			log.Println("input... finished.")
+			return a[0], nil
+		},
+	}, {
+		name:           "transit1",
+		channelInputs:  []string{"t11"},
+		channelOutputs: []string{"output"},
+		worker: func(a ...any) (any, error) {
+			log.Println("transit1...")
+			time.Sleep(time.Second)
+			log.Println("transit1... finished.")
+			return a[0], nil
+		},
+	},
+}
+
+func NewDAGOneStraightPipeline() *SimpleDAG1 {
+	f := SimpleDAG1{
+		SimpleDAG: *NewSimpleDAG[string, string](),
+	}
+	f.InitChannels("input", "t11", "output")
+	f.InitWorkflow("input", "output")
+	return &f
+}
+
+func TestSimpleDAGOneStaightPipeline(t *testing.T) {
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+	root := context.Background()
+	t.Run("normal case", func(t *testing.T) {
+		f := NewDAGOneStraightPipeline()
+		f.AttachWorkflowTransit(DAGOneStraightPipeline...)
+		var input = "test"
+		var results = f.RunOnce(root, &input)
+		assert.Equal(t, "test", *results)
+	})
+	t.Run("error case", func(t *testing.T) {
+		f := NewDAGOneStraightPipeline()
+		transits := DAGOneStraightPipeline
+		transits[1].worker = func(a ...any) (any, error) {
+			log.Println("transit1...")
+			time.Sleep(time.Second)
+			return nil, errors.New("error(s) occurred")
+		}
+		f.AttachWorkflowTransit(transits...)
+		var input = "test"
+		var results = f.RunOnce(root, &input)
+		assert.Nil(t, results)
+	})
+}
+
 // NewDAGThreeParallelDelayedTransits defines a workflow.
-func NewDAGThreeParallelDelayedTransits() *DAGParallelTransits {
-	f := DAGParallelTransits{
+func NewDAGThreeParallelDelayedTransits() *SimpleDAG1 {
+	f := SimpleDAG1{
 		SimpleDAG: *NewSimpleDAG[string, string](),
 	}
 	f.InitChannels("input", "t11", "t12", "t13", "t21", "t22", "t23", "output")
@@ -216,5 +275,24 @@ func TestSimpleDAGContext_Cancel(t *testing.T) {
 		var input = "test"
 		var results = f.RunOnce(root, &input)
 		assert.Equal(t, "0test1test2test", *results)
+	})
+	t.Run("error case", func(t *testing.T) {
+		f := NewDAGThreeParallelDelayedTransits()
+		transits := DAGThreeParallerlDelayedWorkflowTransits
+		transits[1] = &SimpleDAGWorkflowTransit{
+			name:           "transit1",
+			channelInputs:  []string{"t11"},
+			channelOutputs: []string{"t21"},
+			worker: func(a ...any) (any, error) {
+				log.Println("transit1...")
+				return nil, errors.New("error(s) occurred")
+				//time.Sleep(time.Second)
+				//log.Println("transit1... finished.")
+				//return a[0], nil
+			},
+		}
+		var input = "test"
+		var results = f.RunOnce(root, &input)
+		log.Println(results)
 	})
 }
