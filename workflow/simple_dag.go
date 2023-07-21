@@ -204,6 +204,7 @@ type SimpleDAGContext struct {
 }
 
 func (d *SimpleDAGContext) Cancel(cause error) {
+	log.Println("canceled:", cause.Error())
 	d.cancel(cause)
 }
 
@@ -271,9 +272,10 @@ var ErrChannelNotExist = errors.New("the specified channel does not exist")
 func (d *SimpleDAG[TInput, TOutput]) BuildWorkflowInput(ctx context.Context, result any, inputs ...string) {
 	for _, next := range inputs {
 		next := next
-		go func(next string) {
+		go func(ctx context.Context, next string) {
+			log.Println("build input:", next)
 			d.channels[next] <- result
-		}(next)
+		}(ctx, next)
 	}
 }
 
@@ -285,6 +287,7 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflowOutput(ctx context.Context, ou
 	for i, name := range outputs {
 		go func(ctx context.Context, i int, name string) {
 			defer wg.Done()
+			defer log.Println("build output defer:", name)
 			flag := true
 			for flag {
 				select {
@@ -338,6 +341,7 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 			case <-ctx.Done(): // If the end notification has been received, it will exit directly without notifying the worker to work.
 				return
 			default:
+				log.Println("build workflow:", t.name, " selected.")
 			}
 			var work = func(t *SimpleDAGWorkflowTransit) (any, error) {
 				// It doesn't seem to be useful.
@@ -396,7 +400,15 @@ func (d *SimpleDAG[TInput, TOutput]) Execute(ctx context.Context, input *TInput)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		defer log.Println("execute done.")
+		log.Println("execute 1")
 		r := d.BuildWorkflowOutput(ctx, d.channelOutput)
+		select {
+		case <-ctx.Done(): // If the end notification has been received, it will exit directly.
+			return
+		default:
+		}
+		log.Println("execute 2")
 		if r, ok := (*r)[0].(TOutput); !ok {
 			t := new(TOutput)
 			var e = SimpleDAGValueTypeError{actual: r, expect: t}
