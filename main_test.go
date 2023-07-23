@@ -895,3 +895,29 @@ func TestSelectCaseReturning(t *testing.T) {
 		assert.Equal(t, "exited", <-signalText)
 	})
 }
+
+func TestOneDoneMultiNotified(t *testing.T) {
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+	t.Run("one done and multi are notified", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		var wg sync.WaitGroup
+		notified := func(index int) {
+			defer wg.Done()
+			flag := true
+			for flag {
+				select {
+				case <-ctx.Done():
+					log.Println("worker[%i] notified to stop.", index)
+					flag = false
+				}
+			}
+		}
+		wg.Add(2)
+		go notified(1)
+		go notified(2)
+		cancel()
+		wg.Wait()
+		log.Println("finished.")
+		time.Sleep(time.Millisecond * 10)
+	})
+}
