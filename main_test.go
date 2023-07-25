@@ -920,4 +920,54 @@ func TestOneDoneMultiNotified(t *testing.T) {
 		log.Println("finished.")
 		time.Sleep(time.Millisecond * 10)
 	})
+	t.Run("one and next done and the last notified", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		ch1 := make(chan struct{})
+		ch2 := make(chan struct{})
+		notified1 := func() {
+			<-ch1
+			log.Println("worker 1 is notified to start.")
+			defer func() {
+				ch2 <- struct{}{}
+				log.Println("worker 1 has notified the worker 2 to start.")
+			}()
+			flag := true
+			index := 0
+			for flag {
+				time.Sleep(time.Millisecond * 100)
+				index++
+				select {
+				case <-ctx.Done():
+					log.Println("worker 1 is notified to stop.")
+					flag = false
+				}
+			}
+			log.Printf("worker 1 has looped %d times.", index)
+		}
+		notified2 := func() {
+			<-ch2
+			log.Println("worker 2 is notified to start.")
+			flag := true
+			index := 0
+			for flag {
+				time.Sleep(time.Millisecond * 100)
+				index++
+				select {
+				case <-ctx.Done():
+					log.Println("worker 2 is notified to stop.")
+					flag = false
+				}
+			}
+			log.Printf("worker 2 has looped %d times.", index)
+			time.Sleep(time.Millisecond * 10)
+		}
+		go notified1()
+		go notified2()
+		log.Println("the main has notified the worker 1 to start.")
+		ch1 <- struct{}{}
+		time.Sleep(time.Second)
+		log.Println("the main canceled.")
+		cancel()
+		time.Sleep(time.Millisecond * 100)
+	})
 }
