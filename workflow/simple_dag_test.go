@@ -118,7 +118,7 @@ func TestDAGTwoParallelTransits(t *testing.T) {
 		var input = "test"
 		var results = f.RunOnce(root, &input)
 		assert.Equal(t, "0test1test", *results)
-		// f.RunOnce(&input)
+		// f.RunOnce(root, &input)
 	})
 }
 

@@ -204,8 +204,10 @@ type SimpleDAGContext struct {
 }
 
 func (d *SimpleDAGContext) Cancel(cause error) {
-	log.Println("canceled:", cause.Error())
+	//log.Println("canceled:", cause.Error())
+	//time.Sleep(time.Second)
 	d.cancel(cause)
+	//log.Println("canceled finished:", cause.Error())
 }
 
 // SimpleDAG defines a generic directed acyclic graph of proposals.
@@ -273,7 +275,7 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflowInput(ctx context.Context, res
 	for _, next := range inputs {
 		next := next
 		go func(ctx context.Context, next string) {
-			log.Println("build input:", next)
+			//log.Println("build input:", next)
 			d.channels[next] <- result
 		}(ctx, next)
 	}
@@ -287,14 +289,20 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflowOutput(ctx context.Context, ou
 	for i, name := range outputs {
 		go func(ctx context.Context, i int, name string) {
 			defer wg.Done()
-			defer log.Println("build output defer:", name)
+			//defer log.Println("build output done:", name)
 			flag := true
 			for flag {
+				//time.Sleep(time.Millisecond * 100)
+				//log.Printf("worker[%s] output flag: [%v]", name, flag)
 				select {
 				case results[i] = <-d.channels[name]:
 					flag = false
+					//log.Printf("worker[%s] channel received: [%v]\n", name, results[i])
 				case <-ctx.Done():
 					flag = false
+					//log.Printf("worker[%s] notified to stop, as %s", name, ctx.Err())
+				default:
+					flag = true
 				}
 			}
 		}(ctx, i, name)
@@ -341,7 +349,7 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 			case <-ctx.Done(): // If the end notification has been received, it will exit directly without notifying the worker to work.
 				return
 			default:
-				log.Println("build workflow:", t.name, " selected.")
+				//log.Println("build workflow:", t.name, " selected.")
 			}
 			var work = func(t *SimpleDAGWorkflowTransit) (any, error) {
 				// It doesn't seem to be useful.
@@ -396,19 +404,23 @@ func (d *SimpleDAG[TInput, TOutput]) Execute(ctx context.Context, input *TInput)
 		return nil
 	}
 	var results *TOutput
-	var wg sync.WaitGroup
-	wg.Add(1)
+	//var wg sync.WaitGroup
+	//wg.Add(1)
+	signal := make(chan struct{})
 	go func() {
-		defer wg.Done()
-		defer log.Println("execute done.")
-		log.Println("execute 1")
+		//defer wg.Done()
+		defer func() {
+			signal <- struct{}{}
+		}()
+		//defer log.Println("execute done.")
+		//log.Println("execute 1")
 		r := d.BuildWorkflowOutput(ctx, d.channelOutput)
 		select {
 		case <-ctx.Done(): // If the end notification has been received, it will exit directly.
 			return
 		default:
 		}
-		log.Println("execute 2")
+		//log.Println("execute 2")
 		if r, ok := (*r)[0].(TOutput); !ok {
 			t := new(TOutput)
 			var e = SimpleDAGValueTypeError{actual: r, expect: t}
@@ -419,7 +431,9 @@ func (d *SimpleDAG[TInput, TOutput]) Execute(ctx context.Context, input *TInput)
 		}
 	}()
 	d.BuildWorkflowInput(ctx, *input, d.channelInput)
-	wg.Wait()
+	//wg.Wait()
+	// time.Sleep(time.Second * 10)
+	<-signal
 	return results
 }
 
