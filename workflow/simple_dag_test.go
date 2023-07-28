@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"context"
+	"errors"
 	"log"
 	"strconv"
 	"testing"
@@ -234,19 +235,19 @@ func TestSimpleDAGOneStaightPipeline(t *testing.T) {
 		var results = f.RunOnce(root, &input)
 		assert.Equal(t, "test", *results)
 	})
-	//t.Run("error case", func(t *testing.T) {
-	//	f := NewDAGOneStraightPipeline()
-	//	transits := DAGOneStraightPipeline
-	//	transits[1].worker = func(a ...any) (any, error) {
-	//		log.Println("transit1...")
-	//		time.Sleep(time.Second)
-	//		return nil, errors.New("error(s) occurred")
-	//	}
-	//	f.AttachWorkflowTransit(transits...)
-	//	var input = "test"
-	//	var results = f.RunOnce(root, &input)
-	//	assert.Nil(t, results)
-	//})
+	t.Run("error case", func(t *testing.T) {
+		f := NewDAGOneStraightPipeline()
+		transits := DAGOneStraightPipeline
+		transits[1].worker = func(a ...any) (any, error) {
+			log.Println("transit1...")
+			time.Sleep(time.Second)
+			return nil, errors.New("error(s) occurred")
+		}
+		f.AttachWorkflowTransit(transits...)
+		var input = "test"
+		var results = f.RunOnce(root, &input)
+		assert.Nil(t, results)
+	})
 }
 
 // NewDAGThreeParallelDelayedTransits defines a workflow.
