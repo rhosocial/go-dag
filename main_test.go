@@ -1025,9 +1025,11 @@ func TestOneDoneMultiNotified(t *testing.T) {
 		time.Sleep(time.Millisecond * 100)
 	})
 
-	t.Run("The", func(t *testing.T) {
+	t.Run("The worker 0 is canceled, and worker 1 is also canceled.", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		ch := make([]chan struct{}, 2) // Only the array of channels is declared, no channels are declared.
+		ch[0] = make(chan struct{})
+		ch[1] = make(chan struct{})
 		var wg sync.WaitGroup
 		notified := func(index int, cancel context.CancelFunc) {
 			defer wg.Done()
@@ -1054,8 +1056,6 @@ func TestOneDoneMultiNotified(t *testing.T) {
 		wg.Add(2)
 		go notified(0, cancel)
 		go notified(1, cancel)
-		ch[0] = make(chan struct{})
-		ch[1] = make(chan struct{})
 		ch[0] <- struct{}{}
 		ch[1] <- struct{}{}
 		wg.Wait()
