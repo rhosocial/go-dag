@@ -1101,4 +1101,41 @@ func TestOneDoneMultiNotified(t *testing.T) {
 		wg.Wait()
 		log.Println("finished.")
 	})
+	t.Run("start first, notify later", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		ch := make([]chan struct{}, 2) // Only the array of channels is declared, no channels are declared.
+		ch[0] = make(chan struct{})
+		ch[1] = make(chan struct{})
+		var wg sync.WaitGroup
+		notified := func(index int, cancel context.CancelFunc) {
+			defer wg.Done()
+			<-ch[index]
+			flag := true
+			times := 0
+			for flag {
+				times++
+				select {
+				case <-ctx.Done():
+					log.Printf("worker %d is notified to stop.", index)
+					flag = false
+				default:
+					time.Sleep(time.Millisecond * 100)
+					if index == 1 && times > 2 {
+						log.Println("canceled.")
+						cancel()
+					}
+				}
+			}
+			log.Printf("worker %d has looped %d times.", index, times)
+			time.Sleep(time.Millisecond * 10)
+		}
+		wg.Add(2)
+		go notified(0, cancel)
+		ch[0] <- struct{}{}
+		time.Sleep(time.Millisecond * 200)
+		go notified(1, cancel)
+		ch[1] <- struct{}{}
+		wg.Wait()
+		log.Println("finished.")
+	})
 }
