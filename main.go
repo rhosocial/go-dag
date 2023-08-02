@@ -284,3 +284,70 @@ func (d *DAG[TInput, TOutput]) Run(input *TInput) *TOutput {
 	log.Println("output received:", results)
 	return &results
 }
+
+var workflowChan chan string
+
+func WorkflowWithContext(ctx context.Context, flag *bool) {
+	go func(ctx context.Context, flag *bool) {
+		defer func(flag *bool) {
+			*flag = true
+		}(flag)
+		b := false
+		for {
+			if b {
+				break
+			}
+			select {
+			case <-ctx.Done(): // 若上下文通知退出，则退出。
+				return
+			default: // 若上下文未通知退出，则检查工作流通道是否有送入。
+				select {
+				case v, ok := <-workflowChan:
+					log.Println(v, ok)
+					b = true // 如果有送入，则标记退出检查。
+				}
+			}
+		}
+	}(ctx, flag)
+	time.Sleep(time.Second)
+}
+
+func (d *DAG[TInput, TOutput]) BuildWorkflowOutput2(ctx context.Context, outputs ...string) *[]any {
+	var count = len(outputs)
+	log.Println("WorkflowOutput will receive the contents from: ", outputs)
+	var results = make([]any, count)
+	var wg sync.WaitGroup
+	wg.Add(count)
+	for i, name := range outputs {
+		//i := i
+		//name := name
+		go func(ctx context.Context, i int, name string) {
+			defer wg.Done()
+			if _, existed := d.channels[name]; !existed {
+				panic(fmt.Sprintf("Specified channel[%s] does not exist, not initialized?", name))
+			}
+			b := false
+			for {
+				if b {
+					break
+				}
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					select {
+					case r, _ := <-d.channels[name]:
+						results[i] = r
+						b = true
+					}
+				}
+			}
+			log.Println(fmt.Sprintf("WorkflowOutput[channel: %s] listening...", name))
+			results[i] = <-d.channels[name]
+			log.Println(fmt.Sprintf("WorkflowOutput[channel: %s] received: ", name), results[i])
+		}(ctx, i, name)
+	}
+	wg.Wait()
+	log.Println(fmt.Sprintf("WorkflowOutput len: %d", len(results)))
+	return &results
+}
