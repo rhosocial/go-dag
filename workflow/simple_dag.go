@@ -23,8 +23,8 @@ type SimpleDAGWorkflowTransit struct {
 
 	// channelInputs defines the input channel names required by this transit node.
 	//
-	// All channels are listened to when building a workflow.
-	// The transit node will only be executed when all channels have passed in values.
+	// All channelInputs are listened to when building a workflow.
+	// The transit node will only be executed when all channelInputs have passed in values.
 	// Therefore, at least one channel must be specified.
 	//
 	// Note: Since each channel is unbuffered, it is strongly recommended to use each channel only once.
