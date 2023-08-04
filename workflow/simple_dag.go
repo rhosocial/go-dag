@@ -58,14 +58,14 @@ type SimpleDAGWorkflowTransit struct {
 }
 
 type SimpleDAGInitInterface interface {
-	// InitChannels initializes the channels that the workflow should have. All channels are unbuffered.
+	// InitChannels initializes the channelInputs that the workflow should have. All channelInputs are unbuffered.
 	//
-	// The parameter is the channel name and cannot be repeated.
+	// The parameter is the channel channelInputs and cannot be repeated.
 	InitChannels(channels ...string)
 
-	// AttachChannels attaches additional channel names. All channels are unbuffered.
+	// AttachChannels attaches additional channel names. All channelInputs are unbuffered.
 	//
-	// If the channel name already exists, the channel will be recreated.
+	// If the channel channelInputs already exists, the channel will be recreated.
 	AttachChannels(channels ...string)
 
 	// InitWorkflow initializes the workflow.
