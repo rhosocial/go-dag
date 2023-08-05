@@ -70,11 +70,11 @@ type SimpleDAGInitInterface interface {
 
 	// InitWorkflow initializes the workflow.
 	//
-	// Among the parameters, input indicates the name of the input channel,
-	// output indicates the name of the output channel, and transits indicates the transit node.
+	// Among the parameters, input indicates the channelInputs of the input channel,
+	// output indicates the channelInputs of the output channel, and transits indicates the transit node.
 	//
 	// Before executing this method, the corresponding channel(s) must be prepared.
-	// And it must be ensured that all created channels can be used. Otherwise, unforeseen consequences may occur.
+	// And it must be ensured that all created channelInputs can be used. Otherwise, unforeseen consequences may occur.
 	InitWorkflow(input string, output string, transits ...*SimpleDAGWorkflowTransit)
 
 	// AttachWorkflowTransit attaches additional transit node of workflow.
