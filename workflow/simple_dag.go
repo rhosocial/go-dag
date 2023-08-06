@@ -88,20 +88,20 @@ type SimpleDAGInterface[TInput, TOutput any] interface {
 	SimpleDAGInitInterface
 	// BuildWorkflow builds the workflow.
 	//
-	// Input and output channels must be specified, otherwise error is returned.
+	// Input and output channelInputs must be specified, otherwise error is returned.
 	BuildWorkflow(ctx context.Context) error
 
 	// BuildWorkflowInput builds channel(s) for inputting the execution result of the current node to the subsequent node(s).
 	//
 	// Among the parameters, result is the content to be input to subsequent node(s).
-	// inputs is the name of the channels that receive the content.
+	// inputs is the channelInputs of the channelInputs that receive the content.
 	// You should check that the channel exists before calling this method, otherwise it will panic.
 	BuildWorkflowInput(ctx context.Context, result any, inputs ...string)
 
-	// BuildWorkflowOutput builds a set of channels for receiving execution results of predecessor nodes.
+	// BuildWorkflowOutput builds a set of channelInputs for receiving execution results of predecessor nodes.
 	//
-	// outputs is the name of the channels that content will send to in order.
-	// Only when all channels specified by outputs have received data will the result be returned.
+	// outputs is the channelInputs of the channelInputs that content will send to in order.
+	// Only when all channelInputs specified by outputs have received data will the result be returned.
 	// That is, as long as there is a channel that has not received data, the method will always be blocked.
 	// The returned result is an array, the number of array elements is consistent with outputs,
 	// and the results of its elements are in the order specified by outputs.
@@ -113,14 +113,14 @@ type SimpleDAGInterface[TInput, TOutput any] interface {
 	// If the ctx status is `Done()`, the data returned by this method is not available.
 	BuildWorkflowOutput(ctx context.Context, outputs ...string) *[]any
 
-	// CloseWorkflow closes all channels after workflow execution.
+	// CloseWorkflow closes all channelInputs after workflow execution.
 	//
 	// Note: if you want to ensure that the workflow is only executed once,
 	// execution of this method is deferred immediately after BuildWorkflow.
 	CloseWorkflow()
 
 	// Execute builds the workflow and executes it.
-	// All channels will not be closed after this method is executed, that is, you can execute it again and again.
+	// All channelInputs will not be closed after this method is executed, that is, you can execute it again and again.
 	// But this method can only be executed once at a time.
 	// If this method is called before the last call is completed, the call will be blocked until the last execution ends.
 	// That is, pipelined execution is not supported.
@@ -128,14 +128,14 @@ type SimpleDAGInterface[TInput, TOutput any] interface {
 	// you should newly instantiate multiple SimpleDAG instances and execute them separately.
 	Execute(ctx context.Context, input *TInput) *TOutput
 
-	// RunOnce executes the workflow only once. All channels are closed after execution.
+	// RunOnce executes the workflow only once. All channelInputs are closed after execution.
 	// If you want to re-execute, you need to re-create the workflow instance. (call NewSimpleDAG)
 	RunOnce(ctx context.Context, input *TInput) *TOutput
 }
 
-// SimpleDAGChannel defines the channels used by this directed acyclic graph.
+// SimpleDAGChannel defines the channelInputs used by this directed acyclic graph.
 type SimpleDAGChannel struct {
-	// channels stores all channels of this directed acyclic graph. The key of the map is the channel name.
+	// channels stores all channels of this directed acyclic graph. The key of the map is the channel channels.
 	channels map[string]chan any
 	// channelInput defines the channel used for input. Currently only a single input channel is supported.
 	channelInput string
