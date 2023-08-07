@@ -152,6 +152,9 @@ func NewSimpleDAGChannel() *SimpleDAGChannel {
 }
 
 func (d *SimpleDAGChannel) exists(name string) bool {
+	if d.channels == nil {
+		return false
+	}
 	if _, existed := d.channels[name]; existed {
 		return true
 	}
