@@ -272,15 +272,17 @@ func (d *SimpleDAG[TInput, TOutput]) AttachWorkflowTransit(transits ...*SimpleDA
 	d.workflowTransits = append(d.workflowTransits, transits...)
 }
 
+var ErrChannelNotInitialized = errors.New("the channel map is not initialized")
+
 var ErrChannelNotExist = errors.New("the specified channel does not exist")
 
 func (d *SimpleDAG[TInput, TOutput]) BuildWorkflowInput(ctx context.Context, result any, inputs ...string) {
 	for _, next := range inputs {
 		next := next
-		go func(ctx context.Context, next string) {
-			//log.Println("build input:", next)
+		go func(next string) {
+			log.Println("BuildWorkflowInput[next]:", next)
 			d.channels[next] <- result
-		}(ctx, next)
+		}(next)
 	}
 }
 
