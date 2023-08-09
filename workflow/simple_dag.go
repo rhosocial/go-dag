@@ -207,10 +207,29 @@ type SimpleDAGContext struct {
 }
 
 func (d *SimpleDAGContext) Cancel(cause error) {
-	//log.Println("canceled:", cause.Error())
+	log.Println("canceled:", cause.Error())
 	//time.Sleep(time.Second)
 	d.cancel(cause)
 	//log.Println("canceled finished:", cause.Error())
+}
+
+type SimpleDAGWorkflowInterface interface {
+	IsRunning() bool
+	GetRunningWorkflowNames() []string
+}
+
+type SimpleDAGWorkflow struct {
+	workflowTransits []*SimpleDAGWorkflowTransit
+	SimpleDAGWorkflowInterface
+}
+
+func (d *SimpleDAGWorkflow) IsRunning() bool {
+	return true
+}
+
+func (d *SimpleDAGWorkflow) GetRunningWorkflowNames() *[]string {
+	results := make([]string, 0)
+	return &results
 }
 
 // SimpleDAG defines a generic directed acyclic graph of proposals.
@@ -219,10 +238,10 @@ func (d *SimpleDAGContext) Cancel(cause error) {
 // Note that the input and output data types of the transit node are not mandatory,
 // you need to verify it yourself.
 type SimpleDAG[TInput, TOutput any] struct {
-	workflowTransits []*SimpleDAGWorkflowTransit
-	logger           *log.Logger
+	logger *log.Logger
 	SimpleDAGChannel
 	SimpleDAGContext
+	SimpleDAGWorkflow
 	SimpleDAGInterface[TInput, TOutput]
 }
 
@@ -294,20 +313,12 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflowOutput(ctx context.Context, ou
 	for i, name := range outputs {
 		go func(ctx context.Context, i int, name string) {
 			defer wg.Done()
-			//defer log.Println("build output done:", name)
-			flag := true
-			for flag {
-				//time.Sleep(time.Millisecond * 100)
-				//log.Printf("worker[%s] output flag: [%v]", name, flag)
+			for {
 				select {
 				case results[i] = <-d.channels[name]:
-					flag = false
-					//log.Printf("worker[%s] channel received: [%v]\n", name, results[i])
+					return
 				case <-ctx.Done():
-					flag = false
-					//log.Printf("worker[%s] notified to stop, as %s", name, ctx.Err())
-				default:
-					flag = true
+					return
 				}
 			}
 		}(ctx, i, name)
