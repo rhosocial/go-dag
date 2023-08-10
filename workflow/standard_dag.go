@@ -18,7 +18,7 @@ type StandardDAGInterface[TInput, TOutput any] interface {
 
 type StandardDAGChannel struct {
 	Prefix string
-	// channels stores all channels of this directed acyclic graph. The key of the map is the channel name.
+	// channels stores all channels of this directed acyclic graph. The key of the map is the channel channels.
 	channels      map[string]chan any
 	channelInput  string
 	channelOutput string
