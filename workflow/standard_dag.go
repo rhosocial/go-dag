@@ -24,6 +24,10 @@ type StandardDAGChannel struct {
 	channelOutput string
 }
 
+// StandardDAG supports：
+// 1. Pipeline execution, track each execution(including progress, elapsed time and logs), record critical path and topology sorting, detect loops, support deadline or time limit.
+// 2. StandardDAGWorkflowTransit supports WorkerPool, which can increase or decrease the number of workers as needed, as well as the priority of each worker.
+// 3. Node worker supports stateful and stateless. The execution result of the node worker supports the caching mechanism, that is, the same input directly gives the corresponding output instead of executing it once. This feature is limited to stateless worker nodes.
 type StandardDAG[TInput, TOutput any] struct {
 	workflowTransits []*SimpleDAGWorkflowTransit
 	logger           *log.Logger
