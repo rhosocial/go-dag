@@ -89,7 +89,7 @@ func (d *StandardDAG[TInput, TOutput]) CloseWorkflow() {
 	if len(d.channelOutput) == 0 {
 		return
 	}
-	//close(d.channels[d.channelOutput])
+	//close(d.channelInputs[d.channelOutput])
 	if len(d.workflowTransits) == 0 {
 		return
 	}
