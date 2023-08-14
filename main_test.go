@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"reflect"
 	"strconv"
 	"sync"
 	"testing"
@@ -1137,5 +1138,52 @@ func TestOneDoneMultiNotified(t *testing.T) {
 		ch[1] <- struct{}{}
 		wg.Wait()
 		log.Println("finished.")
+	})
+}
+
+func TestTypeConversion(t *testing.T) {
+	t.Run("scalar type", func(t *testing.T) {
+		var a any = 6
+		value1, ok := a.(int)
+		assert.True(t, ok)
+		assert.Equal(t, 6, value1)
+		value2, ok := a.(int64)
+		assert.False(t, ok)
+		assert.Zero(t, value2)
+	})
+	t.Run("struct", func(t *testing.T) {
+		type typeA struct {
+			FieldA int
+			FieldB int64
+		}
+		var a any = typeA{1, 2}
+		type typeB struct {
+			FieldA int
+			FieldB int64
+		}
+		value1, ok := a.(typeB)
+		assert.False(t, ok)
+		assert.Equal(t, typeB{0, 0}, value1)
+
+		var b any = typeB{1, 2}
+		value2, ok := b.(typeB)
+		assert.True(t, ok)
+		assert.Equal(t, typeB{1, 2}, value2)
+
+		var c1 any = typeA{1, 2}
+		var c2 any = typeB{1, 2}
+
+		assert.NotEqual(t, reflect.TypeOf(c1), reflect.TypeOf(c2))
+	})
+}
+
+func TestChannel(t *testing.T) {
+	t.Run("close when blocking", func(t *testing.T) {
+		chan1 := make(chan struct{})
+		go func() {
+			<-chan1
+		}()
+		time.Sleep(time.Millisecond * 100)
+		close(chan1)
 	})
 }
