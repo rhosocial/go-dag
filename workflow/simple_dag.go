@@ -308,6 +308,7 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflowInput(ctx context.Context, res
 		next := next
 		go func(next string) {
 			log.Println("BuildWorkflowInput[next]:", next)
+			// TODO: The following statement will cause data race with the access channel map in "CloseWorkflow()".
 			d.channels[next] <- result
 		}(next)
 	}
@@ -425,6 +426,7 @@ func (d *SimpleDAG[TInput, TOutput]) CloseWorkflow() {
 	//		close(d.channels[c])
 	//	}
 	//}
+	// TODO: The following statement will cause data race with the access channel map in "BuildWorkflowInput()".
 	d.channels = nil
 }
 
