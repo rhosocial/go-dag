@@ -304,14 +304,21 @@ var ErrChannelNotInitialized = errors.New("the channel map is not initialized")
 var ErrChannelNotExist = errors.New("the specified channel does not exist")
 
 func (d *SimpleDAG[TInput, TOutput]) BuildWorkflowInput(ctx context.Context, result any, inputs ...string) {
-	for _, next := range inputs {
-		next := next
-		go func(next string) {
-			log.Println("BuildWorkflowInput[next]:", next)
-			// TODO: The following statement will cause data race with the access channel map in "CloseWorkflow()".
-			d.channels[next] <- result
-		}(next)
+	for i := 0; i < len(inputs); i++ {
+		i := i
+		go func() {
+			d.channels[inputs[i]] <- result
+		}()
 	}
+	// Please DO NOT use the for-range statements, as it is caused the data race, use c-style for-loop instead.
+	//for _, next := range inputs {
+	//	next := next
+	//	go func(next string) {
+	//		log.Println("BuildWorkflowInput[next]:", next)
+	//		// TODO: The following statement will cause data race with the access channel map in "CloseWorkflow()".
+	//		d.channels[next] <- result
+	//	}(next)
+	//}
 }
 
 func (d *SimpleDAG[TInput, TOutput]) BuildWorkflowOutput(ctx context.Context, outputs ...string) *[]any {
@@ -319,19 +326,34 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflowOutput(ctx context.Context, ou
 	var results = make([]any, count)
 	var wg sync.WaitGroup
 	wg.Add(count)
-	for i, name := range outputs {
-		go func(ctx context.Context, i int, name string) {
+	for i := 0; i < len(outputs); i++ {
+		i := i
+		go func() {
 			defer wg.Done()
 			for {
 				select {
-				case results[i] = <-d.channels[name]:
+				case results[i] = <-d.channels[outputs[i]]:
 					return
 				case <-ctx.Done():
 					return
 				}
 			}
-		}(ctx, i, name)
+		}()
 	}
+	// Please DO NOT use the following statements, as it is caused the data race, use c-style for-loop instead.
+	//for i, name := range outputs {
+	//	go func(ctx context.Context, i int, name string) {
+	//		defer wg.Done()
+	//		for {
+	//			select {
+	//			case results[i] = <-d.channels[name]:
+	//				return
+	//			case <-ctx.Done():
+	//				return
+	//			}
+	//		}
+	//	}(ctx, i, name)
+	//}
 	wg.Wait()
 	return &results
 }
