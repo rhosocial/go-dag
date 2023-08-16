@@ -3,6 +3,7 @@ package workflow
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"strconv"
 	"testing"
@@ -257,13 +258,56 @@ func NewDAGThreeParallelDelayedTransits() *SimpleDAG1 {
 		SimpleDAG: *NewSimpleDAG[string, string](),
 	}
 	f.InitChannels("input", "t11", "t12", "t13", "t21", "t22", "t23", "output")
-	//         input               t11              output
-	// input ----+----> transit1 -------> transit ----------> output
-	//           |                 t12       ^
-	//           +----> transit2 ------------+
-	//           |                 t13       ^
-	//           +----> transit3 ------------+
+	//   input                   t11               t21              output
+	// ---------> input ----+--------> transit1 --------> transit ----------> output
+	//                      |    t12               t22      ^
+	//                      +--------> transit2 ------------+
+	//                      |    t13               t23      ^
+	//                      +--------> transit3 ------------+
 	f.InitWorkflow("input", "output")
+	return &f
+}
+
+func NewMultipleParallelTransitNodesWorkflow(total int) *SimpleDAG1 {
+	if total < 1 {
+		return nil
+	}
+	f := SimpleDAG1{
+		SimpleDAG: *NewSimpleDAG[string, string](),
+	}
+	f.InitChannels("input", "output")
+	channelInputs := make([]string, total)
+	channelOutputs := make([]string, total)
+	for i := 0; i < total; i++ {
+		err := f.AttachChannels(fmt.Sprintf("t%05d1", i), fmt.Sprintf("t%05d2", i))
+		if err != nil {
+			return nil
+		}
+		channelInputs[i] = fmt.Sprintf("t%05d2", i)
+		channelOutputs[i] = fmt.Sprintf("t%05d1", i)
+	}
+	f.InitWorkflow("input", "output")
+	for i := 0; i < total; i++ {
+		f.AttachWorkflowTransit(NewSimpleDAGWorkflowTransit(
+			fmt.Sprintf("transit%05d", i),
+			[]string{fmt.Sprintf("t%05d1", i)},
+			[]string{fmt.Sprintf("t%05d2", i)},
+			func(a ...any) (any, error) {
+				return a[0], nil
+			},
+		))
+	}
+	f.AttachWorkflowTransit(NewSimpleDAGWorkflowTransit(
+		"input", []string{"input"}, channelOutputs, func(a ...any) (any, error) {
+			return a[0], nil
+		}), NewSimpleDAGWorkflowTransit(
+		"output", channelInputs, []string{"output"}, func(a ...any) (any, error) {
+			var r string
+			for i, c := range a {
+				r = r + strconv.Itoa(i) + c.(string)
+			}
+			return r, nil
+		}))
 	return &f
 }
 
@@ -277,30 +321,54 @@ func TestSimpleDAGContext_Cancel(t *testing.T) {
 		var results = f.RunOnce(root, &input)
 		assert.Equal(t, "0test1test2test", *results)
 	})
-	//TODO: This test unit will report DATA RACE issue.
-	//t.Run("error case", func(t *testing.T) {
-	//	f := NewDAGThreeParallelDelayedTransits()
-	//	transits := DAGThreeParallelDelayedWorkflowTransits
-	//	transits[1] = &SimpleDAGWorkflowTransit{
-	//		name:           "transit1",
-	//		channelInputs:  []string{"t11"},
-	//		channelOutputs: []string{"t21"},
-	//		worker: func(a ...any) (any, error) {
-	//			log.Println("transit1...")
-	//			time.Sleep(time.Second)
-	//			return nil, errors.New("error(s) occurred")
-	//		},
-	//	}
-	//	f.AttachWorkflowTransit(transits...)
-	//	var input = "test"
-	//	var results = f.RunOnce(root, &input)
-	//	assert.Nil(t, results)
-	//})
+	// This unit test is used to find out whether there will be data race issue in the channel map when the transit node reports an error.
+	t.Run("error case", func(t *testing.T) {
+		f := NewDAGThreeParallelDelayedTransits()
+		transits := DAGThreeParallelDelayedWorkflowTransits
+		transits[1] = &SimpleDAGWorkflowTransit{
+			name:           "transit1",
+			channelInputs:  []string{"t11"},
+			channelOutputs: []string{"t21"},
+			worker: func(a ...any) (any, error) {
+				log.Println("transit1...")
+				time.Sleep(time.Second)
+				return nil, errors.New("transit1 reports error(s)")
+			},
+		}
+		f.AttachWorkflowTransit(transits...)
+		var input = "test"
+		var results = f.RunOnce(root, &input)
+		assert.Nil(t, results)
+	})
+	t.Run("normal case with 10000 parallel transit nodes", func(t *testing.T) {
+		f := NewMultipleParallelTransitNodesWorkflow(10000)
+		var input = "test"
+		var results = f.RunOnce(root, &input)
+		t.Log(*results)
+	})
+	t.Run("error case in one of 10000 parallel transit nodes", func(t *testing.T) {
+
+	})
 }
 
 func TestRedundantChannelsError_Error(t *testing.T) {
 	t.Run("multi names", func(t *testing.T) {
 		err := RedundantChannelsError{channels: []string{"a", "b"}}
 		assert.Equal(t, "Redundant channelInputs: a, b", err.Error())
+	})
+}
+
+func BenchmarkMultipleParallelTransitNodesWorkflow(t *testing.B) {
+	root := context.Background()
+	t.Run("10000 parallel transit nodes", func(t *testing.B) {
+		f := NewMultipleParallelTransitNodesWorkflow(10000)
+		var input = "test"
+		f.RunOnce(root, &input)
+	})
+	t.Run(" concat 10000 times", func(t *testing.B) {
+		var input = ""
+		for i := 0; i < 10000; i++ {
+			input += strconv.Itoa(i) + "test"
+		}
 	})
 }
