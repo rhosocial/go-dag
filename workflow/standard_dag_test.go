@@ -17,3 +17,7 @@ func TestNewStandardDAG(t *testing.T) {
 	output := dag.RunOnce(root, &input)
 	assert.Nil(t, output)
 }
+
+func TestStandardDagWithOneStraightPipeline(t *testing.T) {
+
+}

@@ -8,9 +8,39 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rhosocial/go-dag/workflow"
 )
 
+type SimpleDAG1 struct {
+	workflow.SimpleDAG[string, string]
+}
+
 func main() {
+	f := SimpleDAG1{
+		SimpleDAG: *workflow.NewSimpleDAG[string, string](),
+	}
+	f.InitChannels("input", "t11", "output")
+	f.InitWorkflow("input", "output", workflow.NewSimpleDAGWorkflowTransit(
+		"input",
+		[]string{"input"},
+		[]string{"t11"},
+		func(ctx context.Context, a ...any) (any, error) {
+			return a[0], nil
+		},
+	), workflow.NewSimpleDAGWorkflowTransit(
+		"output",
+		[]string{"t11"},
+		[]string{"output"},
+		func(ctx context.Context, a ...any) (any, error) {
+			return 0, nil
+		},
+	))
+	input := "input"
+	output := f.RunOnce(context.Background(), &input)
+	if output != nil {
+		fmt.Println(output)
+	}
 }
 
 func subtest(ctx context.Context, name string, doneCallback func()) {

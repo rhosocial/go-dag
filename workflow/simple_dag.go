@@ -39,7 +39,12 @@ type SimpleDAGWorkflowTransit struct {
 	// Note: Since each channel is unbuffered, it is strongly recommended to use each channel only once.
 	channelOutputs []string
 
-	// worker represents the working method of this node. worker can return error, but error are not passed on to subsequent nodes.
+	// worker represents the working method of this node.
+	//
+	// The first parameter is context.Context, which is used to receive the context derived from the superior to the current task.
+	// All contexts within a worker can receive done notifications for this context.
+	//
+	// worker can return error, but error are not passed on to subsequent nodes.
 	// If the worker returns an error other than nil, the workflow will be canceled directly.
 	//
 	// It is strongly discouraged to panic() in the worker, as this will cause the process to abort and cannot be recovered.
@@ -48,7 +53,7 @@ type SimpleDAGWorkflowTransit struct {
 	// The output of this method will be sent to each channel defined by channelOutputs in order.
 	//
 	// You need to ensure the correctness of the parameter and return value types by yourself, otherwise it will panic.
-	worker func(...any) (any, error)
+	worker func(context.Context, ...any) (any, error)
 
 	// isRunning indicates that the worker is working.
 	isRunning bool
@@ -58,7 +63,7 @@ type SimpleDAGWorkflowTransit struct {
 	// isBuildingMutex sync.RWMutex
 }
 
-func NewSimpleDAGWorkflowTransit(name string, inputs []string, outputs []string, worker func(...any) (any, error)) *SimpleDAGWorkflowTransit {
+func NewSimpleDAGWorkflowTransit(name string, inputs []string, outputs []string, worker func(context.Context, ...any) (any, error)) *SimpleDAGWorkflowTransit {
 	return &SimpleDAGWorkflowTransit{name: name, channelInputs: inputs, channelOutputs: outputs, worker: worker}
 }
 
@@ -403,6 +408,9 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 			default:
 				//log.Println("build workflow:", t.channelInputs, " selected.")
 			}
+			// The sub-Context is derived here only to prevent other Contexts from being affected when the worker stops
+			// actively.
+			workerCtx, _ := context.WithCancelCause(ctx)
 			var work = func(t *SimpleDAGWorkflowTransit) (any, error) {
 				// It doesn't seem to be useful.
 				// t.isBuildingMutex.Lock()
@@ -411,7 +419,7 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 				defer func(t *SimpleDAGWorkflowTransit) {
 					t.isRunning = false
 				}(t)
-				return t.worker(*results...)
+				return t.worker(workerCtx, *results...)
 			}
 			var result, err = work(t)
 			if err != nil {

@@ -71,7 +71,7 @@ func (d *StandardDAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error 
 	for _, t := range d.workflowTransits {
 		go func(t *SimpleDAGWorkflowTransit) {
 			results := d.BuildWorkflowOutput(ctx, t.channelInputs...)
-			var result, err = t.worker(*results...)
+			var result, err = t.worker(ctx, *results...)
 			if err != nil {
 				d.logger.Printf("worker[%s] error(s) occurred: %s\n", t.name, err.Error())
 			}

@@ -36,14 +36,14 @@ func TestSimpleDAGValueTypeError_Error(t *testing.T) {
 		name:           "input",
 		channelInputs:  []string{"input"},
 		channelOutputs: []string{"t11"},
-		worker: func(a ...any) (any, error) {
+		worker: func(ctx context.Context, a ...any) (any, error) {
 			return a[0], nil
 		},
 	}, &SimpleDAGWorkflowTransit{
 		name:           "output",
 		channelInputs:  []string{"t11"},
 		channelOutputs: []string{"output"},
-		worker: func(a ...any) (any, error) {
+		worker: func(ctx context.Context, a ...any) (any, error) {
 			return 0, nil
 		},
 	})
@@ -58,29 +58,29 @@ func NewDAGTwoParallelTransits() *SimpleDAG1 {
 		SimpleDAG: *NewSimpleDAG[string, string](),
 	}
 	f.InitChannels("input", "t11", "t12", "t21", "t22", "output")
-	//         input               t11              output
-	// input ----+----> transit1 -------> transit ----------> output
-	//           |                 t12       ^
-	//           +----> transit2 ------------+
+	//         t:input          t:transit1          t:output
+	//c:input ----+----> c:t11 ------------> c:t21 -----+----> c:output
+	//            |             t:transit2              ^
+	//            +----> c:t12 ------------> c:t22 -----+
 	f.InitWorkflow("input", "output", &SimpleDAGWorkflowTransit{
 		name:           "input",
 		channelInputs:  []string{"input"},
 		channelOutputs: []string{"t11", "t12"},
-		worker: func(a ...any) (any, error) {
+		worker: func(ctx context.Context, a ...any) (any, error) {
 			return a[0], nil
 		},
 	}, &SimpleDAGWorkflowTransit{
 		name:           "transit1",
 		channelInputs:  []string{"t11"},
 		channelOutputs: []string{"t21"},
-		worker: func(a ...any) (any, error) {
+		worker: func(ctx context.Context, a ...any) (any, error) {
 			return a[0], nil
 		},
 	}, &SimpleDAGWorkflowTransit{
 		name:           "transit2",
 		channelInputs:  []string{"t12"},
 		channelOutputs: []string{"t22"},
-		worker: func(a ...any) (any, error) {
+		worker: func(ctx context.Context, a ...any) (any, error) {
 			//var e = SimpleDAGValueTypeError{actual: new(int), expect: new(string)}
 			//var t = SimpleDAGValueTypeError{actual: new(int), expect: new(string)}
 			//log.Println(errors.Is(&e, &t))
@@ -90,7 +90,7 @@ func NewDAGTwoParallelTransits() *SimpleDAG1 {
 		name:           "transit",
 		channelInputs:  []string{"t21", "t22"},
 		channelOutputs: []string{"output"},
-		worker: func(a ...any) (any, error) {
+		worker: func(ctx context.Context, a ...any) (any, error) {
 			var r string
 			for i, c := range a {
 				r = r + strconv.Itoa(i) + c.(string)
@@ -144,7 +144,7 @@ var DAGThreeParallelDelayedWorkflowTransits = []*SimpleDAGWorkflowTransit{
 		name:           "input",
 		channelInputs:  []string{"input"},
 		channelOutputs: []string{"t11", "t12", "t13"},
-		worker: func(a ...any) (any, error) {
+		worker: func(ctx context.Context, a ...any) (any, error) {
 			log.Println("input...")
 			time.Sleep(time.Second)
 			log.Println("input... finished.")
@@ -154,7 +154,7 @@ var DAGThreeParallelDelayedWorkflowTransits = []*SimpleDAGWorkflowTransit{
 		name:           "transit1",
 		channelInputs:  []string{"t11"},
 		channelOutputs: []string{"t21"},
-		worker: func(a ...any) (any, error) {
+		worker: func(ctx context.Context, a ...any) (any, error) {
 			log.Println("transit1...")
 			time.Sleep(time.Second)
 			log.Println("transit1... finished.")
@@ -164,7 +164,7 @@ var DAGThreeParallelDelayedWorkflowTransits = []*SimpleDAGWorkflowTransit{
 		name:           "transit2",
 		channelInputs:  []string{"t12"},
 		channelOutputs: []string{"t22"},
-		worker: func(a ...any) (any, error) {
+		worker: func(ctx context.Context, a ...any) (any, error) {
 			log.Println("transit2...")
 			time.Sleep(time.Second)
 			log.Println("transit2... finished.")
@@ -174,7 +174,7 @@ var DAGThreeParallelDelayedWorkflowTransits = []*SimpleDAGWorkflowTransit{
 		name:           "transit3",
 		channelInputs:  []string{"t13"},
 		channelOutputs: []string{"t23"},
-		worker: func(a ...any) (any, error) {
+		worker: func(ctx context.Context, a ...any) (any, error) {
 			log.Println("transit3...")
 			//time.Sleep(time.Second)
 			log.Println("transit3... finished.")
@@ -184,7 +184,7 @@ var DAGThreeParallelDelayedWorkflowTransits = []*SimpleDAGWorkflowTransit{
 		name:           "transit",
 		channelInputs:  []string{"t21", "t22", "t23"},
 		channelOutputs: []string{"output"},
-		worker: func(a ...any) (any, error) {
+		worker: func(ctx context.Context, a ...any) (any, error) {
 			var r string
 			for i, c := range a {
 				r = r + strconv.Itoa(i) + c.(string)
@@ -199,7 +199,7 @@ var DAGOneStraightPipeline = []*SimpleDAGWorkflowTransit{
 		name:           "input",
 		channelInputs:  []string{"input"},
 		channelOutputs: []string{"t11"},
-		worker: func(a ...any) (any, error) {
+		worker: func(ctx context.Context, a ...any) (any, error) {
 			log.Println("input...")
 			time.Sleep(time.Second)
 			log.Println("input... finished.")
@@ -209,7 +209,7 @@ var DAGOneStraightPipeline = []*SimpleDAGWorkflowTransit{
 		name:           "transit1",
 		channelInputs:  []string{"t11"},
 		channelOutputs: []string{"output"},
-		worker: func(a ...any) (any, error) {
+		worker: func(ctx context.Context, a ...any) (any, error) {
 			log.Println("transit1...")
 			time.Sleep(time.Second)
 			log.Println("transit1... finished.")
@@ -240,7 +240,7 @@ func TestSimpleDAGOneStaightPipeline(t *testing.T) {
 	t.Run("error case", func(t *testing.T) {
 		f := NewDAGOneStraightPipeline()
 		transits := DAGOneStraightPipeline
-		transits[1].worker = func(a ...any) (any, error) {
+		transits[1].worker = func(ctx context.Context, a ...any) (any, error) {
 			log.Println("transit1...")
 			time.Sleep(time.Second)
 			return nil, errors.New("error(s) occurred")
@@ -292,16 +292,16 @@ func NewMultipleParallelTransitNodesWorkflow(total int) *SimpleDAG1 {
 			fmt.Sprintf("transit%05d", i),
 			[]string{fmt.Sprintf("t%05d1", i)},
 			[]string{fmt.Sprintf("t%05d2", i)},
-			func(a ...any) (any, error) {
+			func(ctx context.Context, a ...any) (any, error) {
 				return a[0], nil
 			},
 		))
 	}
 	f.AttachWorkflowTransit(NewSimpleDAGWorkflowTransit(
-		"input", []string{"input"}, channelOutputs, func(a ...any) (any, error) {
+		"input", []string{"input"}, channelOutputs, func(ctx context.Context, a ...any) (any, error) {
 			return a[0], nil
 		}), NewSimpleDAGWorkflowTransit(
-		"output", channelInputs, []string{"output"}, func(a ...any) (any, error) {
+		"output", channelInputs, []string{"output"}, func(ctx context.Context, a ...any) (any, error) {
 			var r string
 			for i, c := range a {
 				r = r + strconv.Itoa(i) + c.(string)
@@ -329,7 +329,7 @@ func TestSimpleDAGContext_Cancel(t *testing.T) {
 			name:           "transit1",
 			channelInputs:  []string{"t11"},
 			channelOutputs: []string{"t21"},
-			worker: func(a ...any) (any, error) {
+			worker: func(ctx context.Context, a ...any) (any, error) {
 				log.Println("transit1...")
 				time.Sleep(time.Second)
 				return nil, errors.New("transit1 reports error(s)")
