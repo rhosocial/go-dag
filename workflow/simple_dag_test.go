@@ -372,3 +372,24 @@ func BenchmarkMultipleParallelTransitNodesWorkflow(t *testing.B) {
 		}
 	})
 }
+
+func TestNestedWorkflow(t *testing.T) {
+	log.SetFlags(log.Lshortfile | log.LstdFlags | log.Lmicroseconds)
+	root := context.Background()
+	f := NewDAGThreeParallelDelayedTransits()
+	transits := DAGThreeParallelDelayedWorkflowTransits
+	transits[1] = &SimpleDAGWorkflowTransit{
+		name:           "transit1",
+		channelInputs:  []string{"t11"},
+		channelOutputs: []string{"t21"},
+		worker: func(ctx context.Context, a ...any) (any, error) {
+			log.Println("transit1...")
+			time.Sleep(time.Second)
+			return nil, errors.New("transit1 reports error(s)")
+		},
+	}
+	f.AttachWorkflowTransit(transits...)
+	var input = "test"
+	var results = f.RunOnce(root, &input)
+	assert.Nil(t, results)
+}
