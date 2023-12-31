@@ -359,9 +359,7 @@ var ErrChannelNotExist = errors.New("the specified channel does not exist")
 func (d *SimpleDAG[TInput, TOutput]) BuildWorkflowInput(ctx context.Context, result any, inputs ...string) {
 	for i := 0; i < len(inputs); i++ {
 		i := i
-		go func() {
-			d.Send(inputs[i], result)
-		}()
+		go d.Send(inputs[i], result)
 	}
 	// Please DO NOT use the for-range statements, as it is caused the data race, use c-style for-loop instead.
 	//for _, next := range inputs {
