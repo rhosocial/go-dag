@@ -59,10 +59,6 @@ type SimpleDAGWorkflowTransit struct {
 
 	// isRunning indicates that the worker is working.
 	isRunning bool
-
-	// isBuildingMutex indicates that the channelInputs, channelOutputs and worker are being accessed.
-	// It doesn't seem to be useful.
-	// isBuildingMutex sync.RWMutex
 }
 
 func NewSimpleDAGWorkflowTransit(name string, inputs []string, outputs []string,
@@ -150,13 +146,12 @@ type SimpleDAGInterface[TInput, TOutput any] interface {
 // SimpleDAGChannel defines the channelInputs used by this directed acyclic graph.
 type SimpleDAGChannel struct {
 	// channels stores all channels of this directed acyclic graph. The key of the map is the channel channels.
-	channels map[string]chan any
+	channels   map[string]chan any
+	muChannels sync.RWMutex
 	// channelInput defines the channel used for input. Currently only a single input channel is supported.
 	channelInput string
 	// channelOutput defines the channel used for output. Currently only a single output channel is supported.
 	channelOutput string
-	// isBuildingMutex indicates that the channels field is being built.
-	isBuildingMutex sync.RWMutex
 }
 
 func NewSimpleDAGChannel() *SimpleDAGChannel {
@@ -166,6 +161,8 @@ func NewSimpleDAGChannel() *SimpleDAGChannel {
 }
 
 func (d *SimpleDAGChannel) exists(name string) bool {
+	d.muChannels.Lock()
+	defer d.muChannels.Unlock()
 	if d.channels == nil {
 		return false
 	}
@@ -174,6 +171,34 @@ func (d *SimpleDAGChannel) exists(name string) bool {
 	}
 	return false
 }
+
+// Send refers to sending the value to the channel with the specified name.
+// Before calling, you must ensure that the channel list has been initialized
+// and the specified channel exists, otherwise an error will be reported.
+func (d *SimpleDAGChannel) Send(name string, value any) error {
+	d.muChannels.Lock()
+	defer d.muChannels.Unlock()
+	if d.channels == nil {
+		return ErrChannelNotInitialized
+	}
+	if _, existed := d.channels[name]; !existed {
+		return ErrChannelNotExist
+	}
+	d.channels[name] <- value
+	return nil
+}
+
+//func (d *SimpleDAGChannel) Receive(name string) (<-chan any, error) {
+//	d.muChannels.Lock()
+//	defer d.muChannels.Unlock()
+//	if d.channels == nil {
+//		return nil, ErrChannelNotInitialized
+//	}
+//	if _, existed := d.channels[name]; !existed {
+//		return nil, ErrChannelNotExist
+//	}
+//	return d.channels[name], nil
+//}
 
 type ErrDAGChannelNameExisted struct {
 	name string
@@ -187,10 +212,8 @@ func (e *ErrDAGChannelNameExisted) Error() string {
 // Add channels.
 // Note that the channel name to be added cannot already exist. Otherwise, `ErrDAGChannelNameExisted` will be returned.
 func (d *SimpleDAGChannel) Add(names ...string) error {
-	d.isBuildingMutex.Lock()
-	defer d.isBuildingMutex.Unlock()
 	if d.channels == nil {
-		return ErrChannelNotExist
+		return ErrChannelNotInitialized
 	}
 	for _, v := range names {
 		v := v
@@ -208,8 +231,6 @@ func (d *SimpleDAGChannel) Add(names ...string) error {
 
 // Exists check if the `name` is existed in channel list.
 func (d *SimpleDAGChannel) Exists(name string) bool {
-	d.isBuildingMutex.Lock()
-	defer d.isBuildingMutex.Unlock()
 	return d.exists(name)
 }
 
@@ -245,14 +266,14 @@ type SimpleDAGWorkflow struct {
 	SimpleDAGWorkflowInterface
 }
 
-func (d *SimpleDAGWorkflow) IsRunning() bool {
-	return true
-}
+//func (d *SimpleDAGWorkflow) IsRunning() bool {
+//	return true
+//}
 
-func (d *SimpleDAGWorkflow) GetRunningWorkflowNames() *[]string {
-	results := make([]string, 0)
-	return &results
-}
+//func (d *SimpleDAGWorkflow) GetRunningWorkflowNames() *[]string {
+//	results := make([]string, 0)
+//	return &results
+//}
 
 // SimpleDAG defines a generic directed acyclic graph of proposals.
 // When you use it, you need to specify the input data type and output data type.
@@ -339,7 +360,7 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflowInput(ctx context.Context, res
 	for i := 0; i < len(inputs); i++ {
 		i := i
 		go func() {
-			d.channels[inputs[i]] <- result
+			d.Send(inputs[i], result)
 		}()
 	}
 	// Please DO NOT use the for-range statements, as it is caused the data race, use c-style for-loop instead.
@@ -413,8 +434,6 @@ var ErrChannelOutputEmpty = errors.New("the output channel is empty")
 //
 // After the check passes, the workflow is built according to the following rules:
 func (d *SimpleDAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
-	d.isBuildingMutex.Lock()
-	defer d.isBuildingMutex.Unlock()
 	if d.channels == nil {
 		return ErrChannelNotInitialized
 	}
@@ -461,9 +480,6 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 			// actively.
 			workerCtx, _ := context.WithCancelCause(ctx)
 			var work = func(t *SimpleDAGWorkflowTransit) (any, error) {
-				// It doesn't seem to be useful.
-				// t.isBuildingMutex.Lock()
-				// defer t.isBuildingMutex.Unlock()
 				t.isRunning = true
 				defer func(t *SimpleDAGWorkflowTransit) {
 					t.isRunning = false
@@ -485,11 +501,9 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 
 // CloseWorkflow closes the workflow after execution.
 // After this method is executed, all input, output channels and transits will be deleted.
-//
-// TODO: [ISSUE] If this method is called before `BuildWorkflow()` is completed, a data race will occur.
 func (d *SimpleDAG[TInput, TOutput]) CloseWorkflow() {
-	d.isBuildingMutex.Lock()
-	defer d.isBuildingMutex.Unlock()
+	d.muChannels.Lock()
+	defer d.muChannels.Unlock()
 	if d.channels == nil {
 		return
 	}
@@ -504,12 +518,6 @@ func (d *SimpleDAG[TInput, TOutput]) CloseWorkflow() {
 	if len(d.workflowTransits) == 0 {
 		return
 	}
-	//for _, t := range d.workflowTransits {
-	//	for _, c := range t.channelOutputs {
-	//		close(d.channels[c])
-	//	}
-	//}
-	// TODO: The following statement will cause data race with the access channel map in "BuildWorkflowInput()".
 	d.channels = nil
 }
 
@@ -536,41 +544,41 @@ func (e *TransitChannelNonExistError) Error() string {
 		strings.Join(e.channelInputs, ", "), strings.Join(e.channelOutputs, ", "))
 }
 
-func (d *SimpleDAG[TInput, TOutput]) CheckChannelUsedInTransits() error {
-	if d.channels == nil {
-		return ErrChannelNotInitialized
-	}
-	channels := make(map[string]struct{})
-	for key := range d.channels {
-		channels[key] = struct{}{}
-	}
-	for _, value := range d.workflowTransits {
-		for _, i := range value.channelInputs {
-			delete(channels, i)
-		}
-		for _, o := range value.channelOutputs {
-			delete(channels, o)
-		}
-	}
-	if len(channels) > 0 {
-		c := make([]string, len(channels))
-		index := 0
-		for i := range channels {
-			c[index] = i
-			index++
-		}
-		return &RedundantChannelsError{channels: c}
-	}
-	return nil
-}
+//func (d *SimpleDAG[TInput, TOutput]) CheckChannelUsedInTransits() error {
+//	if d.channels == nil {
+//		return ErrChannelNotInitialized
+//	}
+//	channels := make(map[string]struct{})
+//	for key := range d.channels {
+//		channels[key] = struct{}{}
+//	}
+//	for _, value := range d.workflowTransits {
+//		for _, i := range value.channelInputs {
+//			delete(channels, i)
+//		}
+//		for _, o := range value.channelOutputs {
+//			delete(channels, o)
+//		}
+//	}
+//	if len(channels) > 0 {
+//		c := make([]string, len(channels))
+//		index := 0
+//		for i := range channels {
+//			c[index] = i
+//			index++
+//		}
+//		return &RedundantChannelsError{channels: c}
+//	}
+//	return nil
+//}
 
-func (d *SimpleDAG[TInput, TOutput]) CheckChannelExistsInTransits() error {
-	return nil
-}
+//func (d *SimpleDAG[TInput, TOutput]) CheckChannelExistsInTransits() error {
+//	return nil
+//}
 
-func (d *SimpleDAG[TInput, TOutput]) CheckChannelsAndWorkflows() error {
-	return nil
-}
+//func (d *SimpleDAG[TInput, TOutput]) CheckChannelsAndWorkflows() error {
+//	return nil
+//}
 
 // Execute the workflow.
 //
