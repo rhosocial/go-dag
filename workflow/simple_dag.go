@@ -606,13 +606,13 @@ func (d *SimpleDAG[TInput, TOutput]) Execute(root context.Context, input *TInput
 			return
 		default:
 		}
-		if r, ok := (*r)[0].(TOutput); !ok {
-			t := new(TOutput)
-			var e = SimpleDAGValueTypeError{actual: r, expect: t}
+		if ra, ok := (*r)[0].(TOutput); ok {
+			results = &ra
+		} else {
+			var a = new(TOutput)
+			var e = SimpleDAGValueTypeError{actual: (*r)[0], expect: *a}
 			d.logger.Println(e.Error())
 			results = nil
-		} else {
-			results = &r
 		}
 	}(d.SimpleDAGContext.context)
 	d.BuildWorkflowInput(d.SimpleDAGContext.context, *input, d.channelInput)

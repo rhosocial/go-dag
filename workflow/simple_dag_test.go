@@ -44,7 +44,7 @@ func TestSimpleDAGValueTypeError_Error(t *testing.T) {
 		channelInputs:  []string{"t11"},
 		channelOutputs: []string{"output"},
 		worker: func(ctx context.Context, a ...any) (any, error) {
-			return 0, nil
+			return 0.1, nil
 		},
 	})
 	input := "input"
