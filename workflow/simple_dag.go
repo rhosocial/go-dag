@@ -161,8 +161,6 @@ func NewSimpleDAGChannel() *SimpleDAGChannel {
 }
 
 func (d *SimpleDAGChannel) exists(name string) bool {
-	d.muChannels.Lock()
-	defer d.muChannels.Unlock()
 	if d.channels == nil {
 		return false
 	}
@@ -172,12 +170,27 @@ func (d *SimpleDAGChannel) exists(name string) bool {
 	return false
 }
 
+// GetChannel gets the specified name of channel.
+// Before calling, you must ensure that the channel list has been initialized
+// and the specified channel exists, otherwise an error will be reported.
+func (d *SimpleDAGChannel) GetChannel(name string) (chan any, error) {
+	d.muChannels.RLock()
+	defer d.muChannels.RUnlock()
+	if d.channels == nil {
+		return nil, ErrChannelNotInitialized
+	}
+	if _, existed := d.channels[name]; !existed {
+		return nil, ErrChannelNotExist
+	}
+	return d.channels[name], nil
+}
+
 // Send refers to sending the value to the channel with the specified name.
 // Before calling, you must ensure that the channel list has been initialized
 // and the specified channel exists, otherwise an error will be reported.
 func (d *SimpleDAGChannel) Send(name string, value any) error {
-	d.muChannels.Lock()
-	defer d.muChannels.Unlock()
+	d.muChannels.RLock()
+	defer d.muChannels.RUnlock()
 	if d.channels == nil {
 		return ErrChannelNotInitialized
 	}
@@ -187,18 +200,6 @@ func (d *SimpleDAGChannel) Send(name string, value any) error {
 	d.channels[name] <- value
 	return nil
 }
-
-//func (d *SimpleDAGChannel) Receive(name string) (<-chan any, error) {
-//	d.muChannels.Lock()
-//	defer d.muChannels.Unlock()
-//	if d.channels == nil {
-//		return nil, ErrChannelNotInitialized
-//	}
-//	if _, existed := d.channels[name]; !existed {
-//		return nil, ErrChannelNotExist
-//	}
-//	return d.channels[name], nil
-//}
 
 type ErrDAGChannelNameExisted struct {
 	name string
@@ -212,6 +213,8 @@ func (e *ErrDAGChannelNameExisted) Error() string {
 // Add channels.
 // Note that the channel name to be added cannot already exist. Otherwise, `ErrDAGChannelNameExisted` will be returned.
 func (d *SimpleDAGChannel) Add(names ...string) error {
+	d.muChannels.Lock()
+	defer d.muChannels.Unlock()
 	if d.channels == nil {
 		return ErrChannelNotInitialized
 	}
@@ -359,7 +362,14 @@ var ErrChannelNotExist = errors.New("the specified channel does not exist")
 func (d *SimpleDAG[TInput, TOutput]) BuildWorkflowInput(ctx context.Context, result any, inputs ...string) {
 	for i := 0; i < len(inputs); i++ {
 		i := i
-		go d.Send(inputs[i], result)
+		var ch chan any
+		var err error
+		if ch, err = d.GetChannel(inputs[i]); err != nil {
+			return
+		}
+		go func() {
+			ch <- result
+		}()
 	}
 	// Please DO NOT use the for-range statements, as it is caused the data race, use c-style for-loop instead.
 	//for _, next := range inputs {
@@ -386,11 +396,17 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflowOutput(ctx context.Context, ou
 	wg.Add(count)
 	for i := 0; i < count; i++ {
 		i := i
+		var ch chan any
+		var err error
+		if ch, err = d.GetChannel(outputs[i]); err != nil {
+			wg.Done()
+			continue
+		}
 		go func() {
 			defer wg.Done()
 			for { // always check the done notification.
 				select {
-				case results[i] = <-d.channels[outputs[i]]:
+				case results[i] = <-ch:
 					return
 				case <-ctx.Done():
 					return // return immediately if done received and no longer wait for the channel.
@@ -422,9 +438,9 @@ var ErrChannelOutputEmpty = errors.New("the output channel is empty")
 // BuildWorkflow is used to build the entire workflow.
 //
 // Note that before building, the input and output channels must be prepared, otherwise an exception will be returned:
-// - ErrChannelNotInitialized if d.channels is nil
-// - ErrChannelInputEmpty if d.channelInput is empty
-// - ErrChannelOutputEmpty if d.channelOutput is empty
+// - ErrChannelNotInitialized if channels is nil
+// - ErrChannelInputEmpty if channelInput is empty
+// - ErrChannelOutputEmpty if channelOutput is empty
 //
 // If the transits is empty, do nothing and return nil directly.
 // Otherwise, it is determined whether the input and output channel names mentioned in each transit are defined
@@ -432,6 +448,8 @@ var ErrChannelOutputEmpty = errors.New("the output channel is empty")
 //
 // After the check passes, the workflow is built according to the following rules:
 func (d *SimpleDAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
+	d.muChannels.RLock()
+	defer d.muChannels.RUnlock()
 	if d.channels == nil {
 		return ErrChannelNotInitialized
 	}
