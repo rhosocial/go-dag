@@ -434,8 +434,8 @@ func TestMultiDifferentTimeConsumingTasks(t *testing.T) {
 	t.Run("1s and 2s per task", func(t *testing.T) {
 		// This case demonstrates that when the same workflow executes two tasks that take different times in a row,
 		// the order will be reversed.
-		input1 := 1
-		input2 := 2
+		input1 := 2
+		input2 := 1
 		output1 := new(int)
 		output2 := new(int)
 		signal1 := make(chan struct{})
@@ -462,8 +462,8 @@ func TestMultiDifferentTimeConsumingTasks(t *testing.T) {
 		}()
 		<-signal1
 		<-signal2
-		assert.Equal(t, 2, *output1)
-		assert.Equal(t, 1, *output2)
+		assert.Equal(t, 1, *output1)
+		assert.Equal(t, 2, *output2)
 	})
 
 	// If you want to execute multiple identical workflows in a short period of time
@@ -472,8 +472,8 @@ func TestMultiDifferentTimeConsumingTasks(t *testing.T) {
 	f1.InitChannels("input", "t11", "output")
 	f1.InitWorkflow("input", "output", transits...)
 	t.Run("1s and 2s per task in different workflow", func(t *testing.T) {
-		input1 := 1
-		input2 := 2
+		input1 := 2
+		input2 := 1
 		output1 := new(int)
 		output2 := new(int)
 		signal1 := make(chan struct{})
@@ -497,7 +497,7 @@ func TestMultiDifferentTimeConsumingTasks(t *testing.T) {
 		}()
 		<-signal1
 		<-signal2
-		assert.Equal(t, 1, *output1)
-		assert.Equal(t, 2, *output2)
+		assert.Equal(t, 2, *output1)
+		assert.Equal(t, 1, *output2)
 	})
 }

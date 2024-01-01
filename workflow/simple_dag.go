@@ -534,11 +534,12 @@ func (d *SimpleDAG[TInput, TOutput]) Execute(root context.Context, input *TInput
 	ctx, cancel := context.WithCancelCause(root)
 
 	// Record the context and cancellation handler, so they can be called at the appropriate time.
-	{
+	buildContext := func() {
 		d.muContext.Lock()
 		defer d.muContext.Unlock()
 		d.SimpleDAGContext = SimpleDAGContext{context: ctx, cancel: cancel}
 	}
+	buildContext()
 	err := d.BuildWorkflow(ctx)
 	if err != nil {
 		return nil
