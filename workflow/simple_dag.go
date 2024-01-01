@@ -56,9 +56,6 @@ type SimpleDAGWorkflowTransit struct {
 	//
 	// You need to ensure the correctness of the parameter and return value types by yourself, otherwise it will panic.
 	worker func(context.Context, ...any) (any, error)
-
-	// isRunning indicates that the worker is working.
-	isRunning bool
 }
 
 func NewSimpleDAGWorkflowTransit(name string, inputs []string, outputs []string,
@@ -260,8 +257,6 @@ func (d *SimpleDAGContext) Cancel(cause error) {
 }
 
 type SimpleDAGWorkflowInterface interface {
-	IsRunning() bool
-	GetRunningWorkflowNames() []string
 }
 
 type SimpleDAGWorkflow struct {
@@ -278,6 +273,7 @@ type SimpleDAG[TInput, TOutput any] struct {
 	logger *log.Logger
 	SimpleDAGChannel
 	SimpleDAGContext
+	muContext sync.RWMutex
 	SimpleDAGWorkflow
 	SimpleDAGInterface[TInput, TOutput]
 }
@@ -464,10 +460,6 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 			// actively.
 			workerCtx, _ := context.WithCancelCause(ctx)
 			var work = func(t *SimpleDAGWorkflowTransit) (any, error) {
-				t.isRunning = true
-				defer func(t *SimpleDAGWorkflowTransit) {
-					t.isRunning = false
-				}(t)
 				return t.worker(workerCtx, *results...)
 			}
 			var result, err = work(t)
@@ -542,8 +534,12 @@ func (d *SimpleDAG[TInput, TOutput]) Execute(root context.Context, input *TInput
 	ctx, cancel := context.WithCancelCause(root)
 
 	// Record the context and cancellation handler, so they can be called at the appropriate time.
-	d.SimpleDAGContext = SimpleDAGContext{context: ctx, cancel: cancel}
-	err := d.BuildWorkflow(d.SimpleDAGContext.context)
+	{
+		d.muContext.Lock()
+		defer d.muContext.Unlock()
+		d.SimpleDAGContext = SimpleDAGContext{context: ctx, cancel: cancel}
+	}
+	err := d.BuildWorkflow(ctx)
 	if err != nil {
 		return nil
 	}
@@ -567,8 +563,8 @@ func (d *SimpleDAG[TInput, TOutput]) Execute(root context.Context, input *TInput
 			d.logger.Println(e.Error())
 			results = nil
 		}
-	}(d.SimpleDAGContext.context)
-	d.BuildWorkflowInput(d.SimpleDAGContext.context, *input, d.channelInput)
+	}(ctx)
+	d.BuildWorkflowInput(ctx, *input, d.channelInput)
 	<-signal
 	return results
 }
