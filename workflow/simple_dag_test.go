@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2023 - 2024 vistart.
+ */
+
 package workflow
 
 import (
@@ -392,4 +396,108 @@ func TestNestedWorkflow(t *testing.T) {
 	var input = "test"
 	var results = f.RunOnce(root, &input)
 	assert.Nil(t, results)
+}
+
+func TestMultiDifferentTimeConsumingTasks(t *testing.T) {
+	f := NewSimpleDAG[int, int]()
+	f.InitChannels("input", "t11", "output")
+	//   input             t11               output
+	// ---------> input ----+----> transit ---------->
+	worker := func(ctx context.Context, a ...any) (any, error) {
+		time.Sleep(time.Duration(a[0].(int)) * time.Second)
+		return a[0], nil
+	}
+	transits := []*SimpleDAGWorkflowTransit{
+		&SimpleDAGWorkflowTransit{
+			name:           "transit",
+			channelInputs:  []string{"input"},
+			channelOutputs: []string{"t11"},
+			worker:         worker,
+		}, &SimpleDAGWorkflowTransit{
+			name:           "transit",
+			channelInputs:  []string{"t11"},
+			channelOutputs: []string{"output"},
+			worker:         worker,
+		},
+	}
+	f.InitWorkflow("input", "output", transits...)
+	t.Run("1s per task", func(t *testing.T) {
+		input := 1
+		output := f.Execute(context.Background(), &input)
+		assert.Equal(t, 1, *output)
+	})
+	t.Run("2s per task", func(t *testing.T) {
+		input := 2
+		output := f.Execute(context.Background(), &input)
+		assert.Equal(t, 2, *output)
+	})
+	t.Run("1s and 2s per task", func(t *testing.T) {
+		// This case demonstrates that when the same workflow executes two tasks that take different times in a row,
+		// the order will be reversed.
+		input1 := 1
+		input2 := 2
+		output1 := new(int)
+		output2 := new(int)
+		signal1 := make(chan struct{})
+		signal2 := make(chan struct{})
+		signal1to2 := make(chan struct{}) // make sure that thread 2 being started after thread 1.
+		// The two tasks are executed one after another.
+		// Task 1 takes 2 seconds
+		go func() {
+			t.Log("thread 1 starting at", time.Now())
+			go func() {
+				output1 = f.Execute(context.Background(), &input1)
+				t.Log("thread 1 ended at", time.Now())
+				signal1 <- struct{}{}
+			}()
+			signal1to2 <- struct{}{}
+		}()
+		// Task 2 takes 4 seconds
+		go func() {
+			<-signal1to2
+			t.Log("thread 2 starting at", time.Now())
+			output2 = f.Execute(context.Background(), &input2)
+			t.Log("thread 2 ended at", time.Now())
+			signal2 <- struct{}{}
+		}()
+		<-signal1
+		<-signal2
+		assert.Equal(t, 2, *output1)
+		assert.Equal(t, 1, *output2)
+	})
+
+	// If you want to execute multiple identical workflows in a short period of time
+	// without unpredictable data transfer order, please instantiate a new workflow before each execution.
+	f1 := NewSimpleDAG[int, int]()
+	f1.InitChannels("input", "t11", "output")
+	f1.InitWorkflow("input", "output", transits...)
+	t.Run("1s and 2s per task in different workflow", func(t *testing.T) {
+		input1 := 1
+		input2 := 2
+		output1 := new(int)
+		output2 := new(int)
+		signal1 := make(chan struct{})
+		signal2 := make(chan struct{})
+		signal1to2 := make(chan struct{}) // make sure that thread 2 being started after thread 1.
+		go func() {
+			t.Log("thread 1 starting at", time.Now())
+			go func() {
+				output1 = f.Execute(context.Background(), &input1)
+				t.Log("thread 1 ended at", time.Now())
+				signal1 <- struct{}{}
+			}()
+			signal1to2 <- struct{}{}
+		}()
+		go func() {
+			<-signal1to2
+			t.Log("thread 2 starting at", time.Now())
+			output2 = f1.Execute(context.Background(), &input2)
+			t.Log("thread 2 ended at", time.Now())
+			signal2 <- struct{}{}
+		}()
+		<-signal1
+		<-signal2
+		assert.Equal(t, 1, *output1)
+		assert.Equal(t, 2, *output2)
+	})
 }

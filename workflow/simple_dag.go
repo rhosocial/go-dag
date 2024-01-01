@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 vistart.
+ * Copyright (c) 2023 - 2024 vistart.
  */
 
 package workflow
@@ -269,15 +269,6 @@ type SimpleDAGWorkflow struct {
 	SimpleDAGWorkflowInterface
 }
 
-//func (d *SimpleDAGWorkflow) IsRunning() bool {
-//	return true
-//}
-
-//func (d *SimpleDAGWorkflow) GetRunningWorkflowNames() *[]string {
-//	results := make([]string, 0)
-//	return &results
-//}
-
 // SimpleDAG defines a generic directed acyclic graph of proposals.
 // When you use it, you need to specify the input data type and output data type.
 //
@@ -371,15 +362,6 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflowInput(ctx context.Context, res
 			ch <- result
 		}()
 	}
-	// Please DO NOT use the for-range statements, as it is caused the data race, use c-style for-loop instead.
-	//for _, next := range inputs {
-	//	next := next
-	//	go func(next string) {
-	//		log.Println("BuildWorkflowInput[next]:", next)
-	//		// TODO: The following statement will cause data race with the access channel map in "CloseWorkflow()".
-	//		d.channels[next] <- result
-	//	}(next)
-	//}
 }
 
 // BuildWorkflowOutput will wait for all channels specified by the current transit to output content,
@@ -414,20 +396,6 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflowOutput(ctx context.Context, ou
 			}
 		}()
 	}
-	// Please DO NOT use the following statements, as it is caused the data race, use c-style for-loop instead.
-	//for i, name := range outputs {
-	//	go func(ctx context.Context, i int, name string) {
-	//		defer wg.Done()
-	//		for {
-	//			select {
-	//			case results[i] = <-d.channels[name]:
-	//				return
-	//			case <-ctx.Done():
-	//				return
-	//			}
-	//		}
-	//	}(ctx, i, name)
-	//}
 	wg.Wait()
 	return &results
 }
@@ -560,45 +528,14 @@ func (e *TransitChannelNonExistError) Error() string {
 		strings.Join(e.channelInputs, ", "), strings.Join(e.channelOutputs, ", "))
 }
 
-//func (d *SimpleDAG[TInput, TOutput]) CheckChannelUsedInTransits() error {
-//	if d.channels == nil {
-//		return ErrChannelNotInitialized
-//	}
-//	channels := make(map[string]struct{})
-//	for key := range d.channels {
-//		channels[key] = struct{}{}
-//	}
-//	for _, value := range d.workflowTransits {
-//		for _, i := range value.channelInputs {
-//			delete(channels, i)
-//		}
-//		for _, o := range value.channelOutputs {
-//			delete(channels, o)
-//		}
-//	}
-//	if len(channels) > 0 {
-//		c := make([]string, len(channels))
-//		index := 0
-//		for i := range channels {
-//			c[index] = i
-//			index++
-//		}
-//		return &RedundantChannelsError{channels: c}
-//	}
-//	return nil
-//}
-
-//func (d *SimpleDAG[TInput, TOutput]) CheckChannelExistsInTransits() error {
-//	return nil
-//}
-
-//func (d *SimpleDAG[TInput, TOutput]) CheckChannelsAndWorkflows() error {
-//	return nil
-//}
-
 // Execute the workflow.
 //
 // root is the highest-level context.Context for this execution. Each transit worker will receive its child context.
+//
+// Note that if two tasks with different durations are executed in a short period of time, there is no guarantee that
+// the execution results will be as expected, because the input of the subsequent task may be sent to the channel
+// before the previous task. If you want to execute multiple identical workflows in a short period of time
+// without unpredictable data transfer order, please instantiate a new workflow before each execution.
 func (d *SimpleDAG[TInput, TOutput]) Execute(root context.Context, input *TInput) *TOutput {
 	// The sub-context is introduced and has a cancellation handler, making it easy to terminate the entire process
 	// at any time.
