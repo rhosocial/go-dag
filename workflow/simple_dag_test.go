@@ -431,40 +431,41 @@ func TestMultiDifferentTimeConsumingTasks(t *testing.T) {
 		output := f.Execute(context.Background(), &input)
 		assert.Equal(t, 2, *output)
 	})
-	t.Run("1s and 2s per task", func(t *testing.T) {
-		// This case demonstrates that when the same workflow executes two tasks that take different times in a row,
-		// the order will be reversed.
-		input1 := 2
-		input2 := 1
-		output1 := new(int)
-		output2 := new(int)
-		signal1 := make(chan struct{})
-		signal2 := make(chan struct{})
-		signal1to2 := make(chan struct{}) // make sure that thread 2 being started after thread 1.
-		// The two tasks are executed one after another.
-		// Task 1 takes 2 seconds
-		go func() {
-			t.Log("thread 1 starting at", time.Now())
-			go func() {
-				output1 = f.Execute(context.Background(), &input1)
-				t.Log("thread 1 ended at", time.Now())
-				signal1 <- struct{}{}
-			}()
-			signal1to2 <- struct{}{}
-		}()
-		// Task 2 takes 4 seconds
-		go func() {
-			<-signal1to2
-			t.Log("thread 2 starting at", time.Now())
-			output2 = f.Execute(context.Background(), &input2)
-			t.Log("thread 2 ended at", time.Now())
-			signal2 <- struct{}{}
-		}()
-		<-signal1
-		<-signal2
-		assert.Equal(t, 1, *output1)
-		assert.Equal(t, 2, *output2)
-	})
+	// Bad case: Actual execution results cannot be predicted.
+	//t.Run("1s and 2s per task", func(t *testing.T) {
+	//	// This case demonstrates that when the same workflow executes two tasks that take different times in a row,
+	//	// the order will be reversed.
+	//	input1 := 2
+	//	input2 := 1
+	//	output1 := new(int)
+	//	output2 := new(int)
+	//	signal1 := make(chan struct{})
+	//	signal2 := make(chan struct{})
+	//	signal1to2 := make(chan struct{}) // make sure that thread 2 being started after thread 1.
+	//	// The two tasks are executed one after another.
+	//	// Task 1 takes 2 seconds
+	//	go func() {
+	//		t.Log("thread 1 starting at", time.Now())
+	//		go func() {
+	//			output1 = f.Execute(context.Background(), &input1)
+	//			t.Log("thread 1 ended at", time.Now())
+	//			signal1 <- struct{}{}
+	//		}()
+	//		signal1to2 <- struct{}{}
+	//	}()
+	//	// Task 2 takes 4 seconds
+	//	go func() {
+	//		<-signal1to2
+	//		t.Log("thread 2 starting at", time.Now())
+	//		output2 = f.Execute(context.Background(), &input2)
+	//		t.Log("thread 2 ended at", time.Now())
+	//		signal2 <- struct{}{}
+	//	}()
+	//	<-signal1
+	//	<-signal2
+	//	assert.Equal(t, 1, *output1)
+	//	assert.Equal(t, 2, *output2)
+	//})
 
 	// If you want to execute multiple identical workflows in a short period of time
 	// without unpredictable data transfer order, please instantiate a new workflow before each execution.
