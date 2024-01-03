@@ -85,8 +85,8 @@ func NewDAGTwoParallelTransits() *SimpleDAG1 {
 		channelInputs:  []string{"t12"},
 		channelOutputs: []string{"t22"},
 		worker: func(ctx context.Context, a ...any) (any, error) {
-			//var e = SimpleDAGValueTypeError{actual: new(int), expect: new(string)}
-			//var t = SimpleDAGValueTypeError{actual: new(int), expect: new(string)}
+			//var e = ErrSimpleDAGValueType{actual: new(int), expect: new(string)}
+			//var t = ErrSimpleDAGValueType{actual: new(int), expect: new(string)}
 			//log.Println(errors.Is(&e, &t))
 			return a[0], nil
 		},
@@ -357,7 +357,7 @@ func TestSimpleDAGContext_Cancel(t *testing.T) {
 
 func TestRedundantChannelsError_Error(t *testing.T) {
 	t.Run("multi names", func(t *testing.T) {
-		err := RedundantChannelsError{channels: []string{"a", "b"}}
+		err := ErrRedundantChannels{channels: []string{"a", "b"}}
 		assert.Equal(t, "Redundant channelInputs: a, b", err.Error())
 	})
 }
@@ -377,7 +377,7 @@ func BenchmarkMultipleParallelTransitNodesWorkflow(t *testing.B) {
 	})
 }
 
-func TestNestedWorkflow(t *testing.T) {
+func TestDAGThreeParallelDelayedWorkflowTransits(t *testing.T) {
 	log.SetFlags(log.Lshortfile | log.LstdFlags | log.Lmicroseconds)
 	root := context.Background()
 	f := NewDAGThreeParallelDelayedTransits()
@@ -501,4 +501,8 @@ func TestMultiDifferentTimeConsumingTasks(t *testing.T) {
 		assert.Equal(t, 2, *output1)
 		assert.Equal(t, 1, *output2)
 	})
+}
+
+func TestNestedWorkflow(t *testing.T) {
+
 }

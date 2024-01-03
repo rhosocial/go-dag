@@ -6,11 +6,7 @@ package workflow
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"log"
-	"reflect"
-	"strings"
 	"sync"
 )
 
@@ -198,15 +194,6 @@ func (d *SimpleDAGChannel) Send(name string, value any) error {
 	return nil
 }
 
-type ErrDAGChannelNameExisted struct {
-	name string
-	error
-}
-
-func (e *ErrDAGChannelNameExisted) Error() string {
-	return fmt.Sprintf("the channel[%s] has existed.", e.name)
-}
-
 // Add channels.
 // Note that the channel name to be added cannot already exist. Otherwise, `ErrDAGChannelNameExisted` will be returned.
 func (d *SimpleDAGChannel) Add(names ...string) error {
@@ -250,10 +237,8 @@ type SimpleDAGContext struct {
 // Cancel the execution.
 // `nil` means no reason, but it is strongly recommended not to do this.
 func (d *SimpleDAGContext) Cancel(cause error) {
-	log.Println("canceled:", cause.Error())
-	//time.Sleep(time.Second)
+	// log.Println("canceled:", cause.Error())
 	d.cancel(cause)
-	//log.Println("canceled finished:", cause.Error())
 }
 
 type SimpleDAGWorkflowInterface interface {
@@ -273,21 +258,8 @@ type SimpleDAG[TInput, TOutput any] struct {
 	logger *log.Logger
 	SimpleDAGChannel
 	SimpleDAGContext
-	muContext sync.RWMutex
 	SimpleDAGWorkflow
 	SimpleDAGInterface[TInput, TOutput]
-}
-
-// SimpleDAGValueTypeError defines that the data type output by the node is inconsistent with expectation.
-type SimpleDAGValueTypeError struct {
-	expect any
-	actual any
-	error
-}
-
-func (e *SimpleDAGValueTypeError) Error() string {
-	return fmt.Sprintf("The type of the value [%s] is inconsistent with expectation [%s].",
-		reflect.TypeOf(e.actual), reflect.TypeOf(e.expect))
 }
 
 // NewSimpleDAG instantiates a workflow.
@@ -338,10 +310,6 @@ func (d *SimpleDAG[TInput, TOutput]) InitWorkflow(input string, output string, t
 func (d *SimpleDAG[TInput, TOutput]) AttachWorkflowTransit(transits ...*SimpleDAGWorkflowTransit) {
 	d.workflowTransits = append(d.workflowTransits, transits...)
 }
-
-var ErrChannelNotInitialized = errors.New("the channel map is not initialized")
-
-var ErrChannelNotExist = errors.New("the specified channel does not exist")
 
 // BuildWorkflowInput feeds the result to each input channel in turn.
 //
@@ -395,9 +363,6 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflowOutput(ctx context.Context, ou
 	wg.Wait()
 	return &results
 }
-
-var ErrChannelInputEmpty = errors.New("the input channel is empty")
-var ErrChannelOutputEmpty = errors.New("the output channel is empty")
 
 // BuildWorkflow is used to build the entire workflow.
 //
@@ -464,9 +429,9 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 			}
 			var result, err = work(t)
 			if err != nil {
-				d.logger.Printf("worker[%s] error(s) occurred: %s\n", t.name, err.Error())
+				//d.logger.Printf("worker[%s] error(s) occurred: %s\n", t.name, err.Error())
 				d.SimpleDAGContext.Cancel(err)
-				d.logger.Printf("worker[%s] notified all any other workers to stop.", t.name)
+				//d.logger.Printf("worker[%s] notified all any other workers to stop.", t.name)
 				return
 			}
 			d.BuildWorkflowInput(ctx, result, t.channelOutputs...)
@@ -495,29 +460,6 @@ func (d *SimpleDAG[TInput, TOutput]) CloseWorkflow() {
 		return
 	}
 	d.channels = nil
-}
-
-// RedundantChannelsError indicates that there are unused channelInputs.
-type RedundantChannelsError struct {
-	channels []string
-	error
-}
-
-func (e *RedundantChannelsError) Error() string {
-	return fmt.Sprintf("Redundant channelInputs: %v", strings.Join(e.channels, ", "))
-}
-
-// TransitChannelNonExistError indicates that the channel(s) to be used by the specified node does not exist.
-type TransitChannelNonExistError struct {
-	transitName    string
-	channelInputs  []string
-	channelOutputs []string
-	error
-}
-
-func (e *TransitChannelNonExistError) Error() string {
-	return fmt.Sprintf("The specified channel(s) does not exist: input[%v], output[%v]",
-		strings.Join(e.channelInputs, ", "), strings.Join(e.channelOutputs, ", "))
 }
 
 // Execute the workflow.
@@ -554,9 +496,9 @@ func (d *SimpleDAG[TInput, TOutput]) Execute(root context.Context, input *TInput
 		if ra, ok := (*r)[0].(TOutput); ok {
 			results = &ra
 		} else {
-			var a = new(TOutput)
-			var e = SimpleDAGValueTypeError{actual: (*r)[0], expect: *a}
-			d.logger.Println(e.Error())
+			// var a = new(TOutput)
+			// var e = ErrSimpleDAGValueType{actual: (*r)[0], expect: *a}
+			// d.logger.Println(e.Error())
 			results = nil
 		}
 	}(ctx)
