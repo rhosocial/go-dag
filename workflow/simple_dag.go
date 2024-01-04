@@ -431,10 +431,16 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 			var work = func(t *SimpleDAGWorkflowTransit) (any, error) {
 				return t.worker(workerCtx, *results...)
 			}
+			if d.logger != nil {
+				go d.logger.Trace(LevelDebug, t, "is starting...")
+			}
 			var result, err = work(t)
+			if d.logger != nil {
+				go d.logger.Trace(LevelDebug, t, "ended.")
+			}
 			if err != nil {
 				if d.logger != nil {
-					d.logger.Log(LevelWarning, "worker error(s) occurred", t.name, err)
+					go d.logger.Trace(LevelWarning, t, "worker error(s) reported: "+err.Error())
 				}
 				d.SimpleDAGContext.Cancel(err)
 				return
@@ -504,7 +510,7 @@ func (d *SimpleDAG[TInput, TOutput]) Execute(root context.Context, input *TInput
 			var a = new(TOutput)
 			var e = ErrSimpleDAGValueType{actual: (*r)[0], expect: *a}
 			if d.logger != nil {
-				d.logger.Log(LevelError, e.Error(), e.actual, e.expect)
+				go d.logger.Log(LevelError, e.Error(), e.actual, e.expect)
 			}
 			results = nil
 		}
