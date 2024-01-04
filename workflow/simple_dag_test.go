@@ -22,7 +22,7 @@ type SimpleDAG1 struct {
 
 func TestSimpleDAGChannel_Exists(t *testing.T) {
 	f := SimpleDAG1{
-		SimpleDAG: *NewSimpleDAG[string, string](),
+		SimpleDAG: *NewSimpleDAGWithLogger[string, string](NewSimpleDAGJSONLogger()),
 	}
 	assert.False(t, f.Exists("input"))
 	assert.False(t, f.Exists("output"))
@@ -33,7 +33,7 @@ func TestSimpleDAGChannel_Exists(t *testing.T) {
 
 func TestSimpleDAGValueTypeError_Error(t *testing.T) {
 	f := SimpleDAG1{
-		SimpleDAG: *NewSimpleDAG[string, string](),
+		SimpleDAG: *NewSimpleDAGWithLogger[string, string](NewSimpleDAGJSONLogger()),
 	}
 	f.InitChannels("input", "t11", "output")
 	f.InitWorkflow("input", "output", &SimpleDAGWorkflowTransit{
@@ -59,7 +59,7 @@ func TestSimpleDAGValueTypeError_Error(t *testing.T) {
 // NewDAGTwoParallelTransits defines a workflow.
 func NewDAGTwoParallelTransits() *SimpleDAG1 {
 	f := SimpleDAG1{
-		SimpleDAG: *NewSimpleDAG[string, string](),
+		SimpleDAG: *NewSimpleDAGWithLogger[string, string](NewSimpleDAGJSONLogger()),
 	}
 	f.InitChannels("input", "t11", "t12", "t21", "t22", "output")
 	//         t:input          t:transit1          t:output
@@ -224,7 +224,7 @@ var DAGOneStraightPipeline = []*SimpleDAGWorkflowTransit{
 
 func NewDAGOneStraightPipeline() *SimpleDAG1 {
 	f := SimpleDAG1{
-		SimpleDAG: *NewSimpleDAG[string, string](),
+		SimpleDAG: *NewSimpleDAGWithLogger[string, string](NewSimpleDAGJSONLogger()),
 	}
 	f.InitChannels("input", "t11", "output")
 	f.InitWorkflow("input", "output")
@@ -259,7 +259,7 @@ func TestSimpleDAGOneStaightPipeline(t *testing.T) {
 // NewDAGThreeParallelDelayedTransits defines a workflow.
 func NewDAGThreeParallelDelayedTransits() *SimpleDAG1 {
 	f := SimpleDAG1{
-		SimpleDAG: *NewSimpleDAG[string, string](),
+		SimpleDAG: *NewSimpleDAGWithLogger[string, string](NewSimpleDAGJSONLogger()),
 	}
 	f.InitChannels("input", "t11", "t12", "t13", "t21", "t22", "t23", "output")
 	//   input                   t11               t21              output
@@ -277,7 +277,7 @@ func NewMultipleParallelTransitNodesWorkflow(total int) *SimpleDAG1 {
 		return nil
 	}
 	f := SimpleDAG1{
-		SimpleDAG: *NewSimpleDAG[string, string](),
+		SimpleDAG: *NewSimpleDAGWithLogger[string, string](NewSimpleDAGJSONLogger()),
 	}
 	f.InitChannels("input", "output")
 	channelInputs := make([]string, total)
@@ -399,7 +399,7 @@ func TestDAGThreeParallelDelayedWorkflowTransits(t *testing.T) {
 }
 
 func TestMultiDifferentTimeConsumingTasks(t *testing.T) {
-	f := NewSimpleDAG[int, int]()
+	f := NewSimpleDAGWithLogger[int, int](NewSimpleDAGJSONLogger())
 	f.InitChannels("input", "t11", "output")
 	//   input             t11               output
 	// ---------> input ----+----> transit ---------->
@@ -469,7 +469,7 @@ func TestMultiDifferentTimeConsumingTasks(t *testing.T) {
 
 	// If you want to execute multiple identical workflows in a short period of time
 	// without unpredictable data transfer order, please instantiate a new workflow before each execution.
-	f1 := NewSimpleDAG[int, int]()
+	f1 := NewSimpleDAGWithLogger[int, int](NewSimpleDAGJSONLogger())
 	f1.InitChannels("input", "t11", "output")
 	f1.InitWorkflow("input", "output", transits...)
 	t.Run("1s and 2s per task in different workflow", func(t *testing.T) {

@@ -6,7 +6,6 @@ package workflow
 
 import (
 	"context"
-	"log"
 	"sync"
 )
 
@@ -255,18 +254,23 @@ type SimpleDAGWorkflow struct {
 // Note that the input and output data types of the transit node are not mandatory,
 // you need to verify it yourself.
 type SimpleDAG[TInput, TOutput any] struct {
-	logger *log.Logger
 	SimpleDAGChannel
 	SimpleDAGContext
 	SimpleDAGWorkflow
 	SimpleDAGInterface[TInput, TOutput]
+	logger SimpleDAGLogger
 }
 
 // NewSimpleDAG instantiates a workflow.
+//
+// The new instance does not come with a logger. If you want to specify a logger, use the NewSimpleDAGWithLogger method.
 func NewSimpleDAG[TInput, TOutput any]() *SimpleDAG[TInput, TOutput] {
-	return &SimpleDAG[TInput, TOutput]{
-		logger: log.Default(),
-	}
+	return &SimpleDAG[TInput, TOutput]{}
+}
+
+// NewSimpleDAGWithLogger instantiates a workflow with logger.
+func NewSimpleDAGWithLogger[TInput, TOutput any](logger SimpleDAGLogger) *SimpleDAG[TInput, TOutput] {
+	return &SimpleDAG[TInput, TOutput]{logger: logger}
 }
 
 // InitChannels initializes the channels.
@@ -429,9 +433,10 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 			}
 			var result, err = work(t)
 			if err != nil {
-				//d.logger.Printf("worker[%s] error(s) occurred: %s\n", t.name, err.Error())
+				if d.logger != nil {
+					d.logger.Log(LevelWarning, "worker error(s) occurred", t.name, err)
+				}
 				d.SimpleDAGContext.Cancel(err)
-				//d.logger.Printf("worker[%s] notified all any other workers to stop.", t.name)
 				return
 			}
 			d.BuildWorkflowInput(ctx, result, t.channelOutputs...)
@@ -496,9 +501,11 @@ func (d *SimpleDAG[TInput, TOutput]) Execute(root context.Context, input *TInput
 		if ra, ok := (*r)[0].(TOutput); ok {
 			results = &ra
 		} else {
-			// var a = new(TOutput)
-			// var e = ErrSimpleDAGValueType{actual: (*r)[0], expect: *a}
-			// d.logger.Println(e.Error())
+			var a = new(TOutput)
+			var e = ErrSimpleDAGValueType{actual: (*r)[0], expect: *a}
+			if d.logger != nil {
+				d.logger.Log(LevelError, e.Error(), e.actual, e.expect)
+			}
 			results = nil
 		}
 	}(ctx)
