@@ -513,24 +513,18 @@ func TestNestedWorkflow(t *testing.T) {
 		return a[0], nil
 	}
 	worker2 := func(ctx context.Context, a ...any) (any, error) {
-		f1 := NewSimpleDAG[int, int]()
+		f1 := NewSimpleDAGWithLogger[int, int](NewSimpleDAGJSONLogger())
 		f1.InitChannels("input", "output", "t11")
-		worker := func(ctx context.Context, a ...any) (any, error) {
-			log.Println("started at", time.Now())
-			time.Sleep(time.Duration(a[0].(int)) * time.Second)
-			log.Println("ended at", time.Now())
-			return a[0], nil
-		}
 		channelInputs1 := []string{"input"}
 		channelOutputs1 := []string{"t11"}
 		channelOutputs2 := []string{"output"}
 		transits := []*SimpleDAGWorkflowTransit{
-			NewSimpleDAGWorkflowTransit("i:input", channelInputs1, channelOutputs1, worker),
-			NewSimpleDAGWorkflowTransit("i:output", channelOutputs1, channelOutputs2, worker),
+			NewSimpleDAGWorkflowTransit("i:input", channelInputs1, channelOutputs1, worker1),
+			NewSimpleDAGWorkflowTransit("i:output", channelOutputs1, channelOutputs2, worker1),
 		}
-		f.InitWorkflow("input", "output", transits...)
+		f1.InitWorkflow("input", "output", transits...)
 		input := 1
-		output := f.Execute(context.Background(), &input)
+		output := f1.Execute(context.Background(), &input)
 		return *output, nil
 	}
 	channelInputs1 := []string{"input"}
