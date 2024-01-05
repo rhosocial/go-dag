@@ -12,6 +12,15 @@ var ErrChannelNotExist = errors.New("the specified channel does not exist")
 var ErrChannelInputEmpty = errors.New("the input channel is empty")
 var ErrChannelOutputEmpty = errors.New("the output channel is empty")
 
+type ErrWorkerPanicked struct {
+	transit *SimpleDAGWorkflowTransit
+	error
+}
+
+func (e *ErrWorkerPanicked) Error() string {
+	return fmt.Sprintf("the worker of transit[%s] panicked.", e.transit.name)
+}
+
 type ErrDAGChannelNameExisted struct {
 	name string
 	error

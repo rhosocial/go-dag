@@ -504,5 +504,75 @@ func TestMultiDifferentTimeConsumingTasks(t *testing.T) {
 }
 
 func TestNestedWorkflow(t *testing.T) {
+	f := NewSimpleDAGWithLogger[int, int](NewSimpleDAGJSONLogger())
+	f.InitChannels("input", "output", "t11", "t12")
+	worker1 := func(ctx context.Context, a ...any) (any, error) {
+		log.Println("started at", time.Now())
+		time.Sleep(time.Duration(a[0].(int)) * time.Second)
+		log.Println("ended at", time.Now())
+		return a[0], nil
+	}
+	worker2 := func(ctx context.Context, a ...any) (any, error) {
+		f1 := NewSimpleDAG[int, int]()
+		f1.InitChannels("input", "output", "t11")
+		worker := func(ctx context.Context, a ...any) (any, error) {
+			log.Println("started at", time.Now())
+			time.Sleep(time.Duration(a[0].(int)) * time.Second)
+			log.Println("ended at", time.Now())
+			return a[0], nil
+		}
+		channelInputs1 := []string{"input"}
+		channelOutputs1 := []string{"t11"}
+		channelOutputs2 := []string{"output"}
+		transits := []*SimpleDAGWorkflowTransit{
+			NewSimpleDAGWorkflowTransit("i:input", channelInputs1, channelOutputs1, worker),
+			NewSimpleDAGWorkflowTransit("i:output", channelOutputs1, channelOutputs2, worker),
+		}
+		f.InitWorkflow("input", "output", transits...)
+		input := 1
+		output := f.Execute(context.Background(), &input)
+		return *output, nil
+	}
+	channelInputs1 := []string{"input"}
+	channelOutputs1 := []string{"t11"}
+	channelOutputs2 := []string{"t12"}
+	channelOutputs3 := []string{"output"}
+	transits := []*SimpleDAGWorkflowTransit{
+		NewSimpleDAGWorkflowTransit("input", channelInputs1, channelOutputs1, worker1),
+		NewSimpleDAGWorkflowTransit("transit", channelOutputs1, channelOutputs2, worker2),
+		NewSimpleDAGWorkflowTransit("output", channelOutputs2, channelOutputs3, worker1),
+	}
+	f.InitWorkflow("input", "output", transits...)
+	input := 1
+	output := f.Execute(context.Background(), &input)
+	assert.Equal(t, 1, *output)
+}
 
+func TestErrWorkerPanicked_Error(t *testing.T) {
+	f := NewSimpleDAGWithLogger[int, int](NewSimpleDAGJSONLogger())
+	f.InitChannels("input", "output", "t11", "t12")
+	worker1 := func(ctx context.Context, a ...any) (any, error) {
+		log.Println("started at", time.Now())
+		time.Sleep(time.Duration(a[0].(int)) * time.Second)
+		log.Println("ended at", time.Now())
+		return a[0], nil
+	}
+	worker2 := func(ctx context.Context, a ...any) (any, error) {
+		log.Println("started at", time.Now())
+		panic("worker2 panicked")
+		return a[0], nil
+	}
+	channelInputs1 := []string{"input"}
+	channelOutputs1 := []string{"t11"}
+	channelOutputs2 := []string{"t12"}
+	channelOutputs3 := []string{"output"}
+	transits := []*SimpleDAGWorkflowTransit{
+		NewSimpleDAGWorkflowTransit("input", channelInputs1, channelOutputs1, worker1),
+		NewSimpleDAGWorkflowTransit("transit", channelOutputs1, channelOutputs2, worker2),
+		NewSimpleDAGWorkflowTransit("output", channelOutputs2, channelOutputs3, worker1),
+	}
+	f.InitWorkflow("input", "output", transits...)
+	input := 1
+	output := f.Execute(context.Background(), &input)
+	assert.Nil(t, output)
 }

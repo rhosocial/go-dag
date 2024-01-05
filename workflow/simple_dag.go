@@ -421,6 +421,9 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 			results := d.BuildWorkflowOutput(ctx, t.channelInputs...)
 			select {
 			case <-ctx.Done(): // If the end notification has been received, it will exit directly without notifying the worker to work.
+				if d.logger != nil {
+					d.logger.Trace(LevelWarning, t, "cancellation notified.")
+				}
 				return
 			default:
 				//log.Println("build workflow:", t.channelInputs, " selected.")
@@ -434,7 +437,18 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 			if d.logger != nil {
 				go d.logger.Trace(LevelDebug, t, "is starting...")
 			}
-			var result, err = work(t)
+			var result, err = func(t *SimpleDAGWorkflowTransit) (any, error) {
+				defer func() {
+					if err := recover(); err != nil {
+						e := ErrWorkerPanicked{transit: t}
+						if d.logger != nil {
+							go d.logger.Trace(LevelError, t, e.Error())
+						}
+						d.SimpleDAGContext.Cancel(&e)
+					}
+				}()
+				return work(t)
+			}(t)
 			if d.logger != nil {
 				go d.logger.Trace(LevelDebug, t, "ended.")
 			}
