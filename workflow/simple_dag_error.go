@@ -7,11 +7,19 @@ import (
 	"strings"
 )
 
+// ErrChannelNotInitialized reports when the channel list is not initialized.
 var ErrChannelNotInitialized = errors.New("the channel map is not initialized")
+
+// ErrChannelNotExist indicates that the specified channel does not exist.
 var ErrChannelNotExist = errors.New("the specified channel does not exist")
+
+// ErrChannelInputEmpty indicates that the input channel is empty.
 var ErrChannelInputEmpty = errors.New("the input channel is empty")
+
+// ErrChannelOutputEmpty indicates that the output channel is empty.
 var ErrChannelOutputEmpty = errors.New("the output channel is empty")
 
+// ErrWorkerPanicked reports when the worker is panicked.
 type ErrWorkerPanicked struct {
 	error
 }
@@ -20,6 +28,7 @@ func (e *ErrWorkerPanicked) Error() string {
 	return fmt.Sprintf("worker panicked.")
 }
 
+// ErrDAGChannelNameExisted indicates that the specified channel has existed.
 type ErrDAGChannelNameExisted struct {
 	name string
 	error

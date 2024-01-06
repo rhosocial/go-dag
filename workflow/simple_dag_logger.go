@@ -102,6 +102,7 @@ const (
 // transit refers to the tracking transit.
 // message refers to the tracking message.
 // args refers to other parameters.
+// By default, LevelDebug logs are not displayed. If you want to display, call SetFlags(LDebugEnabled)
 func (l *SimpleDAGJSONLogger) Trace(level LogLevel, transit *SimpleDAGWorkflowTransit, message string, args ...any) {
 	if !logDebugEnabled && (level == LevelDebug) {
 		return
