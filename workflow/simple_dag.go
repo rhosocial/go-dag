@@ -62,12 +62,12 @@ type SimpleDAGInitInterface interface {
 	// InitChannels initializes the channelInputs that the workflow should have. All channelInputs are unbuffered.
 	//
 	// The parameter is the channel channelInputs and cannot be repeated.
-	InitChannels(channels ...string)
+	InitChannels(channels ...string) error
 
 	// AttachChannels attaches additional channel names. All channelInputs are unbuffered.
 	//
 	// If the channel channelInputs already exists, the channel will be recreated.
-	AttachChannels(channels ...string)
+	AttachChannels(channels ...string) error
 
 	// InitWorkflow initializes the workflow.
 	//

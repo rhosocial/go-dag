@@ -28,8 +28,8 @@ const (
 
 type SimpleDAGLogParams struct {
 	TimestampFormat string
-	Level           LogLevel
 	Caller          bool
+	ExtraParams     map[string]any
 }
 
 type SimpleDAGJSONLogger struct {
@@ -40,7 +40,6 @@ func NewSimpleDAGJSONLogger() *SimpleDAGJSONLogger {
 	return &SimpleDAGJSONLogger{
 		params: SimpleDAGLogParams{
 			TimestampFormat: "2006-01-02 15:04:05.000000",
-			Level:           LevelInfo,
 			Caller:          true,
 		},
 	}
@@ -49,7 +48,6 @@ func NewSimpleDAGJSONLogger() *SimpleDAGJSONLogger {
 func (l *SimpleDAGJSONLogger) Log(level LogLevel, message string, args ...any) {
 	data := map[string]any{
 		"timestamp": time.Now().Format(l.params.TimestampFormat),
-		"level":     level,
 		"message":   message,
 	}
 
@@ -86,6 +84,11 @@ const (
 	reset   = "\033[0m"
 )
 
+// Trace output trace information.
+// level refers to the log information level.
+// transit refers to the tracking transit.
+// message refers to the tracking message.
+// args refers to other parameters.
 func (l *SimpleDAGJSONLogger) Trace(level LogLevel, transit *SimpleDAGWorkflowTransit, message string, args ...any) {
 	color := green
 	if level == LevelWarning {
