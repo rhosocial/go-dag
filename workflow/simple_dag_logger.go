@@ -45,7 +45,20 @@ func NewSimpleDAGJSONLogger() *SimpleDAGJSONLogger {
 	}
 }
 
+const (
+	LDebugEnabled = 2
+)
+
+func (l *SimpleDAGJSONLogger) SetFlags(flags uint) {
+	logDebugEnabled = flags&LDebugEnabled > 0
+}
+
+var logDebugEnabled = false
+
 func (l *SimpleDAGJSONLogger) Log(level LogLevel, message string, args ...any) {
+	if !logDebugEnabled && (level == LevelDebug) {
+		return
+	}
 	data := map[string]any{
 		"timestamp": time.Now().Format(l.params.TimestampFormat),
 		"message":   message,
@@ -90,6 +103,9 @@ const (
 // message refers to the tracking message.
 // args refers to other parameters.
 func (l *SimpleDAGJSONLogger) Trace(level LogLevel, transit *SimpleDAGWorkflowTransit, message string, args ...any) {
+	if !logDebugEnabled && (level == LevelDebug) {
+		return
+	}
 	color := green
 	if level == LevelWarning {
 		color = yellow
