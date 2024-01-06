@@ -440,7 +440,7 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 			var result, err = func(t *SimpleDAGWorkflowTransit) (any, error) {
 				defer func() {
 					if err := recover(); err != nil {
-						e := ErrWorkerPanicked{transit: t}
+						e := ErrWorkerPanicked{}
 						if d.logger != nil {
 							go d.logger.Trace(LevelError, t, e.Error())
 						}
