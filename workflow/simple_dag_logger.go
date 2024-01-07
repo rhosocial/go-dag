@@ -29,6 +29,7 @@ const (
 type SimpleDAGLogParams struct {
 	TimestampFormat string
 	Caller          bool
+	logDebugEnabled bool
 	ExtraParams     map[string]any
 }
 
@@ -50,13 +51,11 @@ const (
 )
 
 func (l *SimpleDAGJSONLogger) SetFlags(flags uint) {
-	logDebugEnabled = flags&LDebugEnabled > 0
+	l.params.logDebugEnabled = flags&LDebugEnabled > 0
 }
 
-var logDebugEnabled = false
-
 func (l *SimpleDAGJSONLogger) Log(level LogLevel, message string, args ...any) {
-	if !logDebugEnabled && (level == LevelDebug) {
+	if !l.params.logDebugEnabled && (level == LevelDebug) {
 		return
 	}
 	data := map[string]any{
@@ -104,7 +103,7 @@ const (
 // args refers to other parameters.
 // By default, LevelDebug logs are not displayed. If you want to display, call SetFlags(LDebugEnabled)
 func (l *SimpleDAGJSONLogger) Trace(level LogLevel, transit *SimpleDAGWorkflowTransit, message string, args ...any) {
-	if !logDebugEnabled && (level == LevelDebug) {
+	if !l.params.logDebugEnabled && (level == LevelDebug) {
 		return
 	}
 	color := green

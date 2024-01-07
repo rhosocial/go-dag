@@ -592,9 +592,9 @@ func TestNestedWorkflow(t *testing.T) {
 }
 
 func TestErrWorkerPanicked_Error(t *testing.T) {
-	logger1 := NewSimpleDAGJSONLogger()
-	logger1.SetFlags(LDebugEnabled)
-	f := NewSimpleDAGWithLogger[int, int](logger1)
+	logger := NewSimpleDAGJSONLogger()
+	logger.SetFlags(LDebugEnabled)
+	f := NewSimpleDAGWithLogger[int, int](logger)
 	f.InitChannels("input", "output", "t11", "t12")
 	worker1 := func(ctx context.Context, a ...any) (any, error) {
 		log.Println("started at", time.Now())
