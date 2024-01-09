@@ -5,16 +5,16 @@ name: Go
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "r1.0" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "r1.0" ]
 
 jobs:
   go20_redis7_mysql8:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Build and start containers
         run: docker-compose -f tests/environments/go1.20_redis7_mysql8/docker-compose.yml up -d --build && docker ps
       - name: Set up Go
@@ -37,7 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Build and start containers
         run: docker-compose -f tests/environments/go1.21_redis7_mysql8/docker-compose.yml up -d --build && docker ps
       - name: Set up Go

@@ -6,11 +6,6 @@ package workflow
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"log"
-	"reflect"
-	"strings"
 	"sync"
 )
 
@@ -24,40 +19,40 @@ type SimpleDAGWorkflowTransit struct {
 
 	// channelInputs defines the input channel names required by this transit node.
 	//
-	// All channelInputs are listened to when building a workflow.
+	// All channelInputs are listened to when building a workflow. Each channel is unbuffered.
 	// The transit node will only be executed when all channelInputs have passed in values.
-	// Therefore, at least one channel must be specified.
-	//
-	// Note: Since each channel is unbuffered, it is strongly recommended to use each channel only once.
+	// Therefore, you need to ensure that each channel must have data coming in, otherwise it will always be blocked.
 	channelInputs []string
 
 	// channelOutputs defines the output channel names required by this transit node.
 	//
 	// The results of the execution of the transit node will be sequentially sent to the designated output channel,
-	// so that the subsequent node can continue to execute. Therefore, at least one channel must be specified.
-	//
-	// Note: Since each channel is unbuffered, it is strongly recommended to use each channel only once.
+	// so that the subsequent node can continue to execute. Therefore, you need to ensure that each channel must
+	// have and only one receiver, otherwise it will always be blocked.
 	channelOutputs []string
 
-	// worker represents the working method of this node.
+	// worker represents the working method of this transit.
 	//
 	// The first parameter is context.Context, which is used to receive the context derived from the superior to
 	// the current task. All contexts within a worker can receive done notifications for this context.
+	// If your worker is time-consuming, it should be able to receive incoming done notifications from the context.
 	//
-	// worker can return error, but error are not passed on to subsequent nodes.
+	// The next parameter list is the parameters passed in by the channel defined by channelInputs. You need to check
+	// the type of each parameter passed in yourself.
+	//
+	// The first return value is the execution result of the current worker. If it is a complex value, it is recommended
+	// to pass a pointer. It will be sent to each channel defined by channelOutputs in order.
+	// You need to ensure the correctness of the parameter and return value types by yourself, otherwise it will panic.
+	//
+	// worker can return error, but error are not passed on to subsequent transits.
 	// If the worker returns an error other than nil, the workflow will be canceled directly.
 	//
 	// It is strongly discouraged to panic() in the worker, as this will cause the process to abort and
 	// cannot be recovered.
-	//
-	// Note that the parameter list of the method must correspond to the parameters passed in
-	// by the channel defined by channelInputs.
-	// The output of this method will be sent to each channel defined by channelOutputs in order.
-	//
-	// You need to ensure the correctness of the parameter and return value types by yourself, otherwise it will panic.
 	worker func(context.Context, ...any) (any, error)
 }
 
+// NewSimpleDAGWorkflowTransit instantiates the workflow's transit.
 func NewSimpleDAGWorkflowTransit(name string, inputs []string, outputs []string,
 	worker func(context.Context, ...any) (any, error)) *SimpleDAGWorkflowTransit {
 	return &SimpleDAGWorkflowTransit{name: name, channelInputs: inputs, channelOutputs: outputs, worker: worker}
@@ -67,12 +62,12 @@ type SimpleDAGInitInterface interface {
 	// InitChannels initializes the channelInputs that the workflow should have. All channelInputs are unbuffered.
 	//
 	// The parameter is the channel channelInputs and cannot be repeated.
-	InitChannels(channels ...string)
+	InitChannels(channels ...string) error
 
 	// AttachChannels attaches additional channel names. All channelInputs are unbuffered.
 	//
 	// If the channel channelInputs already exists, the channel will be recreated.
-	AttachChannels(channels ...string)
+	AttachChannels(channels ...string) error
 
 	// InitWorkflow initializes the workflow.
 	//
@@ -151,6 +146,7 @@ type SimpleDAGChannel struct {
 	channelOutput string
 }
 
+// NewSimpleDAGChannel instantiates a map of channels.
 func NewSimpleDAGChannel() *SimpleDAGChannel {
 	return &SimpleDAGChannel{
 		channels: make(map[string]chan any),
@@ -198,15 +194,6 @@ func (d *SimpleDAGChannel) Send(name string, value any) error {
 	return nil
 }
 
-type ErrDAGChannelNameExisted struct {
-	name string
-	error
-}
-
-func (e *ErrDAGChannelNameExisted) Error() string {
-	return fmt.Sprintf("the channel[%s] has existed.", e.name)
-}
-
 // Add channels.
 // Note that the channel name to be added cannot already exist. Otherwise, `ErrDAGChannelNameExisted` will be returned.
 func (d *SimpleDAGChannel) Add(names ...string) error {
@@ -250,18 +237,11 @@ type SimpleDAGContext struct {
 // Cancel the execution.
 // `nil` means no reason, but it is strongly recommended not to do this.
 func (d *SimpleDAGContext) Cancel(cause error) {
-	log.Println("canceled:", cause.Error())
-	//time.Sleep(time.Second)
 	d.cancel(cause)
-	//log.Println("canceled finished:", cause.Error())
-}
-
-type SimpleDAGWorkflowInterface interface {
 }
 
 type SimpleDAGWorkflow struct {
 	workflowTransits []*SimpleDAGWorkflowTransit
-	SimpleDAGWorkflowInterface
 }
 
 // SimpleDAG defines a generic directed acyclic graph of proposals.
@@ -270,31 +250,23 @@ type SimpleDAGWorkflow struct {
 // Note that the input and output data types of the transit node are not mandatory,
 // you need to verify it yourself.
 type SimpleDAG[TInput, TOutput any] struct {
-	logger *log.Logger
 	SimpleDAGChannel
 	SimpleDAGContext
-	muContext sync.RWMutex
 	SimpleDAGWorkflow
 	SimpleDAGInterface[TInput, TOutput]
-}
-
-// SimpleDAGValueTypeError defines that the data type output by the node is inconsistent with expectation.
-type SimpleDAGValueTypeError struct {
-	expect any
-	actual any
-	error
-}
-
-func (e *SimpleDAGValueTypeError) Error() string {
-	return fmt.Sprintf("The type of the value [%s] is inconsistent with expectation [%s].",
-		reflect.TypeOf(e.actual), reflect.TypeOf(e.expect))
+	logger SimpleDAGLogger
 }
 
 // NewSimpleDAG instantiates a workflow.
+//
+// The new instance does not come with a logger. If you want to specify a logger, use the NewSimpleDAGWithLogger method.
 func NewSimpleDAG[TInput, TOutput any]() *SimpleDAG[TInput, TOutput] {
-	return &SimpleDAG[TInput, TOutput]{
-		logger: log.Default(),
-	}
+	return &SimpleDAG[TInput, TOutput]{}
+}
+
+// NewSimpleDAGWithLogger instantiates a workflow with logger.
+func NewSimpleDAGWithLogger[TInput, TOutput any](logger SimpleDAGLogger) *SimpleDAG[TInput, TOutput] {
+	return &SimpleDAG[TInput, TOutput]{logger: logger}
 }
 
 // InitChannels initializes the channels.
@@ -338,10 +310,6 @@ func (d *SimpleDAG[TInput, TOutput]) InitWorkflow(input string, output string, t
 func (d *SimpleDAG[TInput, TOutput]) AttachWorkflowTransit(transits ...*SimpleDAGWorkflowTransit) {
 	d.workflowTransits = append(d.workflowTransits, transits...)
 }
-
-var ErrChannelNotInitialized = errors.New("the channel map is not initialized")
-
-var ErrChannelNotExist = errors.New("the specified channel does not exist")
 
 // BuildWorkflowInput feeds the result to each input channel in turn.
 //
@@ -396,9 +364,6 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflowOutput(ctx context.Context, ou
 	return &results
 }
 
-var ErrChannelInputEmpty = errors.New("the input channel is empty")
-var ErrChannelOutputEmpty = errors.New("the output channel is empty")
-
 // BuildWorkflow is used to build the entire workflow.
 //
 // Note that before building, the input and output channels must be prepared, otherwise an exception will be returned:
@@ -411,6 +376,9 @@ var ErrChannelOutputEmpty = errors.New("the output channel is empty")
 // in the channel. As long as one channel does not exist, an error will be reported: ErrChannelNotExist.
 //
 // After the check passes, the workflow is built according to the following rules:
+// - Call BuildWorkflowOutput to wait for the result of previous transit.
+// - Running the worker of transit.
+// - Call BuildWorkflowInput with the result of the worker.
 func (d *SimpleDAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 	d.muChannels.RLock()
 	defer d.muChannels.RUnlock()
@@ -451,7 +419,10 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 			// If done notification is received, return immediately and no longer wait for the channel.
 			results := d.BuildWorkflowOutput(ctx, t.channelInputs...)
 			select {
-			case <-ctx.Done(): // If the end notification has been received, it will exit directly without notifying the worker to work.
+			case <-ctx.Done(): // If the cancellation notification has been received, it will exit directly.
+				if d.logger != nil {
+					d.logger.Trace(LevelWarning, t, "cancellation notified.")
+				}
 				return
 			default:
 				//log.Println("build workflow:", t.channelInputs, " selected.")
@@ -462,11 +433,29 @@ func (d *SimpleDAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 			var work = func(t *SimpleDAGWorkflowTransit) (any, error) {
 				return t.worker(workerCtx, *results...)
 			}
-			var result, err = work(t)
+			if d.logger != nil {
+				go d.logger.Trace(LevelDebug, t, "is starting...")
+			}
+			var result, err = func(t *SimpleDAGWorkflowTransit) (any, error) {
+				defer func() {
+					if err := recover(); err != nil {
+						e := ErrWorkerPanicked{}
+						if d.logger != nil {
+							go d.logger.Trace(LevelError, t, e.Error())
+						}
+						d.SimpleDAGContext.Cancel(&e)
+					}
+				}()
+				return work(t)
+			}(t)
+			if d.logger != nil {
+				go d.logger.Trace(LevelDebug, t, "ended.")
+			}
 			if err != nil {
-				d.logger.Printf("worker[%s] error(s) occurred: %s\n", t.name, err.Error())
+				if d.logger != nil {
+					go d.logger.Trace(LevelWarning, t, "worker error(s) reported: "+err.Error())
+				}
 				d.SimpleDAGContext.Cancel(err)
-				d.logger.Printf("worker[%s] notified all any other workers to stop.", t.name)
 				return
 			}
 			d.BuildWorkflowInput(ctx, result, t.channelOutputs...)
@@ -495,29 +484,6 @@ func (d *SimpleDAG[TInput, TOutput]) CloseWorkflow() {
 		return
 	}
 	d.channels = nil
-}
-
-// RedundantChannelsError indicates that there are unused channelInputs.
-type RedundantChannelsError struct {
-	channels []string
-	error
-}
-
-func (e *RedundantChannelsError) Error() string {
-	return fmt.Sprintf("Redundant channelInputs: %v", strings.Join(e.channels, ", "))
-}
-
-// TransitChannelNonExistError indicates that the channel(s) to be used by the specified node does not exist.
-type TransitChannelNonExistError struct {
-	transitName    string
-	channelInputs  []string
-	channelOutputs []string
-	error
-}
-
-func (e *TransitChannelNonExistError) Error() string {
-	return fmt.Sprintf("The specified channel(s) does not exist: input[%v], output[%v]",
-		strings.Join(e.channelInputs, ", "), strings.Join(e.channelOutputs, ", "))
 }
 
 // Execute the workflow.
@@ -555,8 +521,10 @@ func (d *SimpleDAG[TInput, TOutput]) Execute(root context.Context, input *TInput
 			results = &ra
 		} else {
 			var a = new(TOutput)
-			var e = SimpleDAGValueTypeError{actual: (*r)[0], expect: *a}
-			d.logger.Println(e.Error())
+			var e = ErrSimpleDAGValueType{actual: (*r)[0], expect: *a}
+			if d.logger != nil {
+				go d.logger.Log(LevelError, e.Error(), e.actual, e.expect)
+			}
 			results = nil
 		}
 	}(ctx)

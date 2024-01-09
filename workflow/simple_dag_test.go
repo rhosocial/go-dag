@@ -22,7 +22,7 @@ type SimpleDAG1 struct {
 
 func TestSimpleDAGChannel_Exists(t *testing.T) {
 	f := SimpleDAG1{
-		SimpleDAG: *NewSimpleDAG[string, string](),
+		SimpleDAG: *NewSimpleDAGWithLogger[string, string](NewSimpleDAGJSONLogger()),
 	}
 	assert.False(t, f.Exists("input"))
 	assert.False(t, f.Exists("output"))
@@ -33,7 +33,7 @@ func TestSimpleDAGChannel_Exists(t *testing.T) {
 
 func TestSimpleDAGValueTypeError_Error(t *testing.T) {
 	f := SimpleDAG1{
-		SimpleDAG: *NewSimpleDAG[string, string](),
+		SimpleDAG: *NewSimpleDAGWithLogger[string, string](NewSimpleDAGJSONLogger()),
 	}
 	f.InitChannels("input", "t11", "output")
 	f.InitWorkflow("input", "output", &SimpleDAGWorkflowTransit{
@@ -54,6 +54,55 @@ func TestSimpleDAGValueTypeError_Error(t *testing.T) {
 	input := "input"
 	assert.Nil(t, f.Execute(context.Background(), &input))
 	assert.Nil(t, f.RunOnce(context.Background(), &input))
+}
+
+// NewDAGTwoParallelTransitsWithLogger defines a workflow with logger.
+func NewDAGTwoParallelTransitsWithLogger() *SimpleDAG1 {
+	f := SimpleDAG1{
+		SimpleDAG: *NewSimpleDAGWithLogger[string, string](NewSimpleDAGJSONLogger()),
+	}
+	f.InitChannels("input", "t11", "t12", "t21", "t22", "output")
+	//         t:input          t:transit1          t:output
+	//c:input ----+----> c:t11 ------------> c:t21 -----+----> c:output
+	//            |             t:transit2              ^
+	//            +----> c:t12 ------------> c:t22 -----+
+	f.InitWorkflow("input", "output", &SimpleDAGWorkflowTransit{
+		name:           "input",
+		channelInputs:  []string{"input"},
+		channelOutputs: []string{"t11", "t12"},
+		worker: func(ctx context.Context, a ...any) (any, error) {
+			return a[0], nil
+		},
+	}, &SimpleDAGWorkflowTransit{
+		name:           "transit1",
+		channelInputs:  []string{"t11"},
+		channelOutputs: []string{"t21"},
+		worker: func(ctx context.Context, a ...any) (any, error) {
+			return a[0], nil
+		},
+	}, &SimpleDAGWorkflowTransit{
+		name:           "transit2",
+		channelInputs:  []string{"t12"},
+		channelOutputs: []string{"t22"},
+		worker: func(ctx context.Context, a ...any) (any, error) {
+			//var e = ErrSimpleDAGValueType{actual: new(int), expect: new(string)}
+			//var t = ErrSimpleDAGValueType{actual: new(int), expect: new(string)}
+			//log.Println(errors.Is(&e, &t))
+			return a[0], nil
+		},
+	}, &SimpleDAGWorkflowTransit{
+		name:           "transit",
+		channelInputs:  []string{"t21", "t22"},
+		channelOutputs: []string{"output"},
+		worker: func(ctx context.Context, a ...any) (any, error) {
+			var r string
+			for i, c := range a {
+				r = r + strconv.Itoa(i) + c.(string)
+			}
+			return r, nil
+		},
+	})
+	return &f
 }
 
 // NewDAGTwoParallelTransits defines a workflow.
@@ -85,8 +134,8 @@ func NewDAGTwoParallelTransits() *SimpleDAG1 {
 		channelInputs:  []string{"t12"},
 		channelOutputs: []string{"t22"},
 		worker: func(ctx context.Context, a ...any) (any, error) {
-			//var e = SimpleDAGValueTypeError{actual: new(int), expect: new(string)}
-			//var t = SimpleDAGValueTypeError{actual: new(int), expect: new(string)}
+			//var e = ErrSimpleDAGValueType{actual: new(int), expect: new(string)}
+			//var t = ErrSimpleDAGValueType{actual: new(int), expect: new(string)}
 			//log.Println(errors.Is(&e, &t))
 			return a[0], nil
 		},
@@ -109,7 +158,7 @@ func TestDAGTwoParallelTransits(t *testing.T) {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 	root := context.Background()
 	t.Run("run successfully", func(t *testing.T) {
-		f := NewDAGTwoParallelTransits()
+		f := NewDAGTwoParallelTransitsWithLogger()
 		var input = "test"
 		for i := 0; i < 5; i++ {
 			var results = f.Execute(root, &input)
@@ -121,7 +170,7 @@ func TestDAGTwoParallelTransits(t *testing.T) {
 
 	t.Run("closed channel and run again", func(t *testing.T) {
 		defer func() { recover() }()
-		f := NewDAGTwoParallelTransits()
+		f := NewDAGTwoParallelTransitsWithLogger()
 		var input = "test"
 		var results = f.RunOnce(root, &input)
 		assert.Equal(t, "0test1test", *results)
@@ -224,7 +273,7 @@ var DAGOneStraightPipeline = []*SimpleDAGWorkflowTransit{
 
 func NewDAGOneStraightPipeline() *SimpleDAG1 {
 	f := SimpleDAG1{
-		SimpleDAG: *NewSimpleDAG[string, string](),
+		SimpleDAG: *NewSimpleDAGWithLogger[string, string](NewSimpleDAGJSONLogger()),
 	}
 	f.InitChannels("input", "t11", "output")
 	f.InitWorkflow("input", "output")
@@ -259,7 +308,7 @@ func TestSimpleDAGOneStaightPipeline(t *testing.T) {
 // NewDAGThreeParallelDelayedTransits defines a workflow.
 func NewDAGThreeParallelDelayedTransits() *SimpleDAG1 {
 	f := SimpleDAG1{
-		SimpleDAG: *NewSimpleDAG[string, string](),
+		SimpleDAG: *NewSimpleDAGWithLogger[string, string](NewSimpleDAGJSONLogger()),
 	}
 	f.InitChannels("input", "t11", "t12", "t13", "t21", "t22", "t23", "output")
 	//   input                   t11               t21              output
@@ -357,7 +406,7 @@ func TestSimpleDAGContext_Cancel(t *testing.T) {
 
 func TestRedundantChannelsError_Error(t *testing.T) {
 	t.Run("multi names", func(t *testing.T) {
-		err := RedundantChannelsError{channels: []string{"a", "b"}}
+		err := ErrRedundantChannels{channels: []string{"a", "b"}}
 		assert.Equal(t, "Redundant channelInputs: a, b", err.Error())
 	})
 }
@@ -377,7 +426,7 @@ func BenchmarkMultipleParallelTransitNodesWorkflow(t *testing.B) {
 	})
 }
 
-func TestNestedWorkflow(t *testing.T) {
+func TestDAGThreeParallelDelayedWorkflowTransits(t *testing.T) {
 	log.SetFlags(log.Lshortfile | log.LstdFlags | log.Lmicroseconds)
 	root := context.Background()
 	f := NewDAGThreeParallelDelayedTransits()
@@ -399,7 +448,7 @@ func TestNestedWorkflow(t *testing.T) {
 }
 
 func TestMultiDifferentTimeConsumingTasks(t *testing.T) {
-	f := NewSimpleDAG[int, int]()
+	f := NewSimpleDAGWithLogger[int, int](NewSimpleDAGJSONLogger())
 	f.InitChannels("input", "t11", "output")
 	//   input             t11               output
 	// ---------> input ----+----> transit ---------->
@@ -469,7 +518,7 @@ func TestMultiDifferentTimeConsumingTasks(t *testing.T) {
 
 	// If you want to execute multiple identical workflows in a short period of time
 	// without unpredictable data transfer order, please instantiate a new workflow before each execution.
-	f1 := NewSimpleDAG[int, int]()
+	f1 := NewSimpleDAGWithLogger[int, int](NewSimpleDAGJSONLogger())
 	f1.InitChannels("input", "t11", "output")
 	f1.InitWorkflow("input", "output", transits...)
 	t.Run("1s and 2s per task in different workflow", func(t *testing.T) {
@@ -501,4 +550,74 @@ func TestMultiDifferentTimeConsumingTasks(t *testing.T) {
 		assert.Equal(t, 2, *output1)
 		assert.Equal(t, 1, *output2)
 	})
+}
+
+func TestNestedWorkflow(t *testing.T) {
+	f := NewSimpleDAGWithLogger[int, int](NewSimpleDAGJSONLogger())
+	f.InitChannels("input", "output", "t11", "t12")
+	worker1 := func(ctx context.Context, a ...any) (any, error) {
+		log.Println("started at", time.Now())
+		time.Sleep(time.Duration(a[0].(int)) * time.Second)
+		log.Println("ended at", time.Now())
+		return a[0], nil
+	}
+	worker2 := func(ctx context.Context, a ...any) (any, error) {
+		f1 := NewSimpleDAGWithLogger[int, int](NewSimpleDAGJSONLogger())
+		f1.InitChannels("input", "output", "t11")
+		channelInputs1 := []string{"input"}
+		channelOutputs1 := []string{"t11"}
+		channelOutputs2 := []string{"output"}
+		transits := []*SimpleDAGWorkflowTransit{
+			NewSimpleDAGWorkflowTransit("i:input", channelInputs1, channelOutputs1, worker1),
+			NewSimpleDAGWorkflowTransit("i:output", channelOutputs1, channelOutputs2, worker1),
+		}
+		f1.InitWorkflow("input", "output", transits...)
+		input := 1
+		output := f1.Execute(context.Background(), &input)
+		return *output, nil
+	}
+	channelInputs1 := []string{"input"}
+	channelOutputs1 := []string{"t11"}
+	channelOutputs2 := []string{"t12"}
+	channelOutputs3 := []string{"output"}
+	transits := []*SimpleDAGWorkflowTransit{
+		NewSimpleDAGWorkflowTransit("input", channelInputs1, channelOutputs1, worker1),
+		NewSimpleDAGWorkflowTransit("transit", channelOutputs1, channelOutputs2, worker2),
+		NewSimpleDAGWorkflowTransit("output", channelOutputs2, channelOutputs3, worker1),
+	}
+	f.InitWorkflow("input", "output", transits...)
+	input := 1
+	output := f.Execute(context.Background(), &input)
+	assert.Equal(t, 1, *output)
+}
+
+func TestErrWorkerPanicked_Error(t *testing.T) {
+	logger := NewSimpleDAGJSONLogger()
+	logger.SetFlags(LDebugEnabled)
+	f := NewSimpleDAGWithLogger[int, int](logger)
+	f.InitChannels("input", "output", "t11", "t12")
+	worker1 := func(ctx context.Context, a ...any) (any, error) {
+		log.Println("started at", time.Now())
+		time.Sleep(time.Duration(a[0].(int)) * time.Second)
+		log.Println("ended at", time.Now())
+		return a[0], nil
+	}
+	worker2 := func(ctx context.Context, a ...any) (any, error) {
+		log.Println("started at", time.Now())
+		panic("worker2 panicked")
+		return a[0], nil
+	}
+	channelInputs1 := []string{"input"}
+	channelOutputs1 := []string{"t11"}
+	channelOutputs2 := []string{"t12"}
+	channelOutputs3 := []string{"output"}
+	transits := []*SimpleDAGWorkflowTransit{
+		NewSimpleDAGWorkflowTransit("input", channelInputs1, channelOutputs1, worker1),
+		NewSimpleDAGWorkflowTransit("transit", channelOutputs1, channelOutputs2, worker2),
+		NewSimpleDAGWorkflowTransit("output", channelOutputs2, channelOutputs3, worker1),
+	}
+	f.InitWorkflow("input", "output", transits...)
+	input := 1
+	output := f.Execute(context.Background(), &input)
+	assert.Nil(t, output)
 }
