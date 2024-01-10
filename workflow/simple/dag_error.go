@@ -1,4 +1,11 @@
-package workflow
+// Copyright (c) 2023 - 2024 vistart. All rights reserved.
+// Use of this source code is governed by Apache-2.0 license
+// that can be found in the LICENSE file.
+
+/*
+Package simple implements a simple workflow that is executed according to a specified directed acyclic graph.
+*/
+package simple
 
 import (
 	"errors"
@@ -11,7 +18,14 @@ import (
 var ErrChannelNotInitialized = errors.New("the channel map is not initialized")
 
 // ErrChannelNotExist indicates that the specified channel does not exist.
-var ErrChannelNotExist = errors.New("the specified channel does not exist")
+type ErrChannelNotExist struct {
+	name string
+	error
+}
+
+func (e *ErrChannelNotExist) Error() string {
+	return fmt.Sprintf("channel[%s] not exist", e.name)
+}
 
 // ErrChannelInputEmpty indicates that the input channel is empty.
 var ErrChannelInputEmpty = errors.New("the input channel is empty")
@@ -28,24 +42,24 @@ func (e *ErrWorkerPanicked) Error() string {
 	return fmt.Sprintf("worker panicked.")
 }
 
-// ErrDAGChannelNameExisted indicates that the specified channel has existed.
-type ErrDAGChannelNameExisted struct {
+// ErrChannelNameExisted indicates that the specified channel has existed.
+type ErrChannelNameExisted struct {
 	name string
 	error
 }
 
-func (e *ErrDAGChannelNameExisted) Error() string {
+func (e *ErrChannelNameExisted) Error() string {
 	return fmt.Sprintf("the channel[%s] has existed.", e.name)
 }
 
-// ErrSimpleDAGValueType defines that the data type output by the node is inconsistent with expectation.
-type ErrSimpleDAGValueType struct {
+// ErrValueType defines that the data type output by the node is inconsistent with expectation.
+type ErrValueType struct {
 	expect any
 	actual any
 	error
 }
 
-func (e ErrSimpleDAGValueType) Error() string {
+func (e ErrValueType) Error() string {
 	return fmt.Sprintf("The type of the value [%s] is inconsistent with expectation [%s].",
 		reflect.TypeOf(e.actual), reflect.TypeOf(e.expect))
 }
