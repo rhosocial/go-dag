@@ -2,9 +2,6 @@
 // Use of this source code is governed by Apache-2.0 license
 // that can be found in the LICENSE file.
 
-/*
-Package simple implements a simple workflow that is executed according to a specified directed acyclic graph.
-*/
 package simple
 
 import "context"

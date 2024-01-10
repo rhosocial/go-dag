@@ -258,11 +258,14 @@ type Transits struct {
 // Note that the input and output data types of the transit node are not mandatory,
 // you need to verify it yourself.
 type DAG[TInput, TOutput any] struct {
-	channels *Channels
-	context  *Context
-	transits *Transits
+	muChannels sync.RWMutex
+	channels   *Channels
+	muContext  sync.RWMutex
+	context    *Context
+	muTransits sync.RWMutex
+	transits   *Transits
+	logger     LoggerInterface
 	DAGInterface[TInput, TOutput]
-	logger LoggerInterface
 }
 
 // NewDAGWithLogger instantiates a workflow with logger.
@@ -316,6 +319,8 @@ func (d *DAG[TInput, TOutput]) AttachWorkflowTransit(transits ...*Transit) {
 //
 // This function does not currently need to consider the termination of the superior context notification.
 func (d *DAG[TInput, TOutput]) BuildWorkflowInput(ctx context.Context, result any, inputs ...string) {
+	d.muChannels.RLock()
+	defer d.muChannels.RUnlock()
 	for i := 0; i < len(inputs); i++ {
 		i := i
 		var ch chan any
@@ -381,22 +386,27 @@ func (d *DAG[TInput, TOutput]) BuildWorkflowOutput(ctx context.Context, outputs 
 // - Running the worker of transit.
 // - Call BuildWorkflowInput with the result of the worker.
 func (d *DAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
-	d.channels.muChannels.RLock()
-	defer d.channels.muChannels.RUnlock()
-	if d.channels.channels == nil {
+	d.muChannels.RLock()
+	defer d.muChannels.RUnlock()
+	if d.channels == nil || d.channels.channels == nil {
 		return ErrChannelNotInitialized
 	}
-	// Build Input
+
+	d.channels.muChannels.RLock()
+	defer d.channels.muChannels.RUnlock()
+	// Checks the channel Input
 	if len(d.channels.channelInput) == 0 {
 		return ErrChannelInputEmpty
 	}
 
-	// Build Output
+	// Checks the channel Output
 	if len(d.channels.channelOutput) == 0 {
 		return ErrChannelOutputEmpty
 	}
 
-	// Build Transits
+	d.transits.muTransits.RLock()
+	defer d.transits.muTransits.RUnlock()
+	// Checks the Transits
 	if len(d.transits.workflowTransits) == 0 {
 		return nil
 	}
@@ -468,11 +478,14 @@ func (d *DAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 // CloseWorkflow closes the workflow after execution.
 // After this method is executed, all input, output channels and transits will be deleted.
 func (d *DAG[TInput, TOutput]) CloseWorkflow() {
-	d.channels.muChannels.Lock()
-	defer d.channels.muChannels.Unlock()
+	d.muChannels.Lock()
+	defer d.muChannels.Unlock()
 	if d.channels == nil {
 		return
 	}
+
+	d.channels.muChannels.RLock()
+	defer d.channels.muChannels.RUnlock()
 	if len(d.channels.channelInput) == 0 {
 		return
 	}
@@ -501,7 +514,10 @@ func (d *DAG[TInput, TOutput]) Execute(root context.Context, input *TInput) *TOu
 	ctx, cancel := context.WithCancelCause(root)
 
 	// Record the context and cancellation handler, so they can be called at the appropriate time.
+	d.muContext.Lock()
 	d.context = &Context{context: ctx, cancel: cancel}
+	d.muContext.Unlock()
+
 	err := d.BuildWorkflow(ctx)
 	if err != nil {
 		return nil
