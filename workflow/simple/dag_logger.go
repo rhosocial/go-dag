@@ -1,20 +1,27 @@
-package workflow
+// Copyright (c) 2023 - 2024 vistart. All rights reserved.
+// Use of this source code is governed by Apache-2.0 license
+// that can be found in the LICENSE file.
+
+/*
+Package simple implements a simple workflow that is executed according to a specified directed acyclic graph.
+*/
+package simple
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"runtime"
 	"time"
 )
 
-// SimpleDAGLogger defines the logging method and the parameters required by the logger.
-// For specific usage, please refer to SimpleDAGJSONLogger.
-type SimpleDAGLogger interface {
-	Log(level LogLevel, message string, args ...any)
-	Trace(level LogLevel, transit *SimpleDAGWorkflowTransit, message string, args ...any)
+// LoggerInterface defines the logging method and the parameters required by the logger.
+// For specific usage, please refer to Logger.
+type LoggerInterface interface {
+	Log(ctx context.Context, level LogLevel, message string, args ...any)
+	Trace(ctx context.Context, level LogLevel, transit *Transit, message string, args ...any)
 
-	SetParams(params SimpleDAGLogParams)
-	GetParams() SimpleDAGLogParams
+	SetFlags(uint)
 }
 
 type LogLevel int
@@ -26,41 +33,37 @@ const (
 	LevelError
 )
 
-type SimpleDAGLogParams struct {
+type LoggerParams struct {
 	TimestampFormat string
 	Caller          bool
 	logDebugEnabled bool
 	ExtraParams     map[string]any
 }
 
-type SimpleDAGJSONLogger struct {
-	params SimpleDAGLogParams
-}
-
-func NewSimpleDAGJSONLogger() *SimpleDAGJSONLogger {
-	return &SimpleDAGJSONLogger{
-		params: SimpleDAGLogParams{
-			TimestampFormat: "2006-01-02 15:04:05.000000",
-			Caller:          true,
-		},
-	}
+type Logger struct {
+	params LoggerParams
+	LoggerInterface
 }
 
 const (
 	LDebugEnabled = 2
 )
 
-func (l *SimpleDAGJSONLogger) SetFlags(flags uint) {
+func (l *Logger) SetFlags(flags uint) {
 	l.params.logDebugEnabled = flags&LDebugEnabled > 0
 }
 
-func (l *SimpleDAGJSONLogger) Log(level LogLevel, message string, args ...any) {
+func (l *Logger) Log(ctx context.Context, level LogLevel, message string, args ...any) {
 	if !l.params.logDebugEnabled && (level == LevelDebug) {
 		return
 	}
 	data := map[string]any{
 		"timestamp": time.Now().Format(l.params.TimestampFormat),
 		"message":   message,
+	}
+
+	if len(args) > 0 {
+		data["args"] = args
 	}
 
 	if l.params.Caller {
@@ -75,14 +78,6 @@ func (l *SimpleDAGJSONLogger) Log(level LogLevel, message string, args ...any) {
 	} else {
 		fmt.Print(string(b))
 	}
-}
-
-func (l *SimpleDAGJSONLogger) SetParams(params SimpleDAGLogParams) {
-	l.params = params
-}
-
-func (l *SimpleDAGJSONLogger) GetParams() SimpleDAGLogParams {
-	return l.params
 }
 
 const (
@@ -102,7 +97,7 @@ const (
 // message refers to the tracking message.
 // args refers to other parameters.
 // By default, LevelDebug logs are not displayed. If you want to display, call SetFlags(LDebugEnabled)
-func (l *SimpleDAGJSONLogger) Trace(level LogLevel, transit *SimpleDAGWorkflowTransit, message string, args ...any) {
+func (l *Logger) Trace(ctx context.Context, level LogLevel, transit *Transit, message string, args ...any) {
 	if !l.params.logDebugEnabled && (level == LevelDebug) {
 		return
 	}
