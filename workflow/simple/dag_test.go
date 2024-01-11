@@ -19,16 +19,16 @@ import (
 func TestSimpleDAGChannel_Exists(t *testing.T) {
 	f, _ := NewDAG[string, string](
 		WithLogger[string, string](NewLogger()))
-	assert.False(t, f.channels.Exists("input"))
-	assert.False(t, f.channels.Exists("output"))
+	assert.False(t, f.channels.exists("input"))
+	assert.False(t, f.channels.exists("output"))
 	//f.InitChannels("input", "output")
 	//assert.True(t, f.channels.Exists("input"))
 	//assert.True(t, f.channels.Exists("output"))
 
 	f1, _ := NewDAG[string, string](
 		WithDefaultChannels[string, string]())
-	assert.True(t, f1.channels.Exists("input"))
-	assert.True(t, f1.channels.Exists("output"))
+	assert.True(t, f1.channels.exists("input"))
+	assert.True(t, f1.channels.exists("output"))
 }
 
 func TestSimpleDAGValueTypeError_Error(t *testing.T) {
@@ -402,9 +402,6 @@ func TestSimpleDAGContext_Cancel(t *testing.T) {
 		assert.NotNil(t, results)
 		t.Log(*results)
 	})
-	t.Run("error case in one of 10000 parallel transit nodes", func(t *testing.T) {
-
-	})
 }
 
 func TestRedundantChannelsError_Error(t *testing.T) {
@@ -582,7 +579,7 @@ func TestNestedWorkflow(t *testing.T) {
 			WithTransits[int, int](transits...),
 			WithLogger[int, int](NewLogger()))
 		input := 1
-		output := f1.Execute(context.Background(), &input)
+		output := f1.Execute(ctx, &input)
 		return *output, nil
 	}
 	channelInputs1 := []string{"input"}
@@ -689,4 +686,124 @@ func TestNewDAGByChainingMethodStyle(t *testing.T) {
 	output := f.Execute(context.Background(), &input)
 	assert.Nil(t, output)
 	time.Sleep(time.Millisecond)
+}
+
+func TestCancelWorkflow(t *testing.T) {
+	worker := func(ctx context.Context, a ...any) (any, error) {
+		log.Println("started at", time.Now())
+		time.Sleep(time.Duration(a[0].(int)) * time.Second)
+		log.Println("ended at", time.Now())
+		return a[0], nil
+	}
+	channelInputs1 := []string{"input"}
+	channelOutputs1 := []string{"t11"}
+	channelOutputs2 := []string{"t12"}
+	channelOutputs3 := []string{"output"}
+	transits := []*Transit{
+		NewTransit("input",
+			WithInputs(channelInputs1...),
+			WithOutputs(channelOutputs1...),
+			WithWorker(worker)),
+		NewTransit("transit",
+			WithInputs(channelOutputs1...),
+			WithOutputs(channelOutputs2...),
+			WithWorker(worker)),
+		NewTransit("output", WithInputs(channelOutputs2...), WithOutputs(channelOutputs3...), WithWorker(worker)),
+	}
+	logger := NewLogger()
+	logger.SetFlags(LDebugEnabled)
+	f, _ := NewDAG[int, int](
+		WithChannels[int, int]("input", "output", "t11", "t12"),
+		WithChannelInput[int, int]("input"),
+		WithChannelOutput[int, int]("output"),
+		WithTransits[int, int](transits...),
+		WithLogger[int, int](logger),
+	)
+	input := 1
+	t.Run("cancel before run", func(t *testing.T) {
+		f.Cancel(errors.New("cancel before run"))
+	})
+	t.Run("cancel when running", func(t *testing.T) {
+		ch1 := make(chan struct{})
+		go func() {
+			output := f.Execute(context.Background(), &input)
+			assert.Nil(t, output)
+			ch1 <- struct{}{}
+		}()
+		go func() {
+			time.Sleep(time.Millisecond * 1500)
+			f.Cancel(errors.New("canceled"))
+		}()
+		<-ch1
+		time.Sleep(time.Millisecond)
+	})
+}
+
+func TestCancelWorkflowWithNestedWorkflow(t *testing.T) {
+	logger := NewLogger()
+	logger.SetFlags(LDebugEnabled)
+	worker1 := func(ctx context.Context, a ...any) (any, error) {
+		log.Println("started at", time.Now())
+		time.Sleep(time.Duration(a[0].(int)) * time.Second)
+		log.Println("ended at", time.Now())
+		return a[0], nil
+	}
+	worker2 := func(ctx context.Context, a ...any) (any, error) {
+		channelInputs1 := []string{"input"}
+		channelOutputs1 := []string{"t11"}
+		channelOutputs2 := []string{"output"}
+		transits := []*Transit{
+			NewTransit("i:input", WithInputs(channelInputs1...), WithOutputs(channelOutputs1...), WithWorker(worker1)),
+			NewTransit("i:output", WithInputs(channelOutputs1...), WithOutputs(channelOutputs2...), WithWorker(worker1)),
+		}
+		f1, _ := NewDAG[int, int](
+			WithDefaultChannels[int, int](),
+			WithChannels[int, int]("t11"),
+			WithTransits[int, int](transits...),
+			WithLogger[int, int](logger))
+		input := 1
+		output := f1.Execute(ctx, &input)
+		if output == nil {
+			return nil, nil
+		}
+		return *output, nil
+	}
+	channelInputs1 := []string{"input"}
+	channelOutputs1 := []string{"t11"}
+	channelOutputs2 := []string{"t12"}
+	channelOutputs3 := []string{"output"}
+	transits := []*Transit{
+		NewTransit("input",
+			WithInputs(channelInputs1...),
+			WithOutputs(channelOutputs1...),
+			WithWorker(worker1)),
+		NewTransit("transit",
+			WithInputs(channelOutputs1...),
+			WithOutputs(channelOutputs2...),
+			WithWorker(worker2)),
+		NewTransit("output", WithInputs(channelOutputs2...), WithOutputs(channelOutputs3...), WithWorker(worker1)),
+	}
+	f, _ := NewDAG[int, int](
+		WithDefaultChannels[int, int](),
+		WithChannels[int, int]("t11", "t12"),
+		WithTransits[int, int](transits...),
+		WithLogger[int, int](logger))
+	input := 1
+	t.Run("cancel before run", func(t *testing.T) {
+		f.Cancel(errors.New("cancel before run"))
+	})
+	t.Run("cancel when running", func(t *testing.T) {
+		ch1 := make(chan struct{})
+		go func() {
+			output := f.Execute(context.Background(), &input)
+			assert.Nil(t, output)
+			ch1 <- struct{}{}
+		}()
+		go func() {
+			time.Sleep(time.Millisecond * 1500)
+			f.Cancel(errors.New("canceled"))
+		}()
+		<-ch1
+		time.Sleep(time.Millisecond)
+	})
 }

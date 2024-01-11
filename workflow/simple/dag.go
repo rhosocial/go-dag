@@ -116,15 +116,15 @@ type DAGInterface[TInput, TOutput any] interface {
 	// RunOnce executes the workflow only once. All channelInputs are closed after execution.
 	// If you want to re-execute, you need to re-create the workflow instance. (call NewDAG)
 	RunOnce(ctx context.Context, input *TInput) *TOutput
+
+	// Cancel an executing workflow. If there are no workflows executing, there will be no impact.
+	Cancel(cause error)
 }
 
 type ChannelsInterface interface {
 	exists(name string) bool
-	GetChannel(name string) (chan any, error)
-	Send(name string, value any) error
-	Add(names ...string) error
-	Exists(name string) bool
-	CloseAll()
+	get(name string) (chan any, error)
+	add(names ...string) error
 }
 
 // Channels defines the channelInputs used by this directed acyclic graph.
@@ -147,17 +147,6 @@ func NewDAGChannels() *Channels {
 	}
 }
 
-func (d *Channels) CloseAll() {
-	d.muChannels.Lock()
-	defer d.muChannels.Unlock()
-
-	if d.channels == nil {
-		return
-	}
-
-	d.channels = nil
-}
-
 func (d *Channels) exists(name string) bool {
 	if d == nil || d.channels == nil {
 		return false
@@ -171,7 +160,10 @@ func (d *Channels) exists(name string) bool {
 // GetChannel gets the specified name of channel.
 // Before calling, you must ensure that the channel list has been initialized
 // and the specified channel exists, otherwise an error will be reported.
-func (d *Channels) GetChannel(name string) (chan any, error) {
+func (d *Channels) get(name string) (chan any, error) {
+	if d == nil {
+		return nil, ErrChannelNotInitialized
+	}
 	d.muChannels.RLock()
 	defer d.muChannels.RUnlock()
 	if d.channels == nil {
@@ -183,25 +175,9 @@ func (d *Channels) GetChannel(name string) (chan any, error) {
 	return d.channels[name], nil
 }
 
-// Send refers to sending the value to the channel with the specified name.
-// Before calling, you must ensure that the channel list has been initialized
-// and the specified channel exists, otherwise an error will be reported.
-func (d *Channels) Send(name string, value any) error {
-	d.muChannels.RLock()
-	defer d.muChannels.RUnlock()
-	if d.channels == nil {
-		return ErrChannelNotInitialized
-	}
-	if _, existed := d.channels[name]; !existed {
-		return &ErrChannelNotExist{name: name}
-	}
-	d.channels[name] <- value
-	return nil
-}
-
 // Add channels.
 // Note that the channel name to be added cannot already exist. Otherwise, `ErrChannelNameExisted` will be returned.
-func (d *Channels) Add(names ...string) error {
+func (d *Channels) add(names ...string) error {
 	if d == nil {
 		return ErrChannelNotInitialized
 	}
@@ -219,11 +195,6 @@ func (d *Channels) Add(names ...string) error {
 		d.channels[v] = make(chan any)
 	}
 	return nil
-}
-
-// Exists check if the `name` is existed in channel list.
-func (d *Channels) Exists(name string) bool {
-	return d.exists(name)
 }
 
 type ContextInterface interface {
@@ -276,7 +247,7 @@ func (d *DAG[TInput, TOutput]) AttachChannels(channels ...string) error {
 	if channels == nil || len(channels) == 0 {
 		return nil
 	}
-	return d.channels.Add(channels...)
+	return d.channels.add(channels...)
 }
 
 // AttachWorkflowTransit attaches the transits to the workflow.
@@ -297,7 +268,7 @@ func (d *DAG[TInput, TOutput]) BuildWorkflowInput(ctx context.Context, result an
 	for i := 0; i < len(inputs); i++ {
 		i := i
 		go func() {
-			if ch, err := d.channels.GetChannel(inputs[i]); err == nil {
+			if ch, err := d.channels.get(inputs[i]); err == nil {
 				ch <- result
 			}
 		}()
@@ -326,7 +297,7 @@ func (d *DAG[TInput, TOutput]) BuildWorkflowOutput(ctx context.Context, outputs 
 			i := i
 			var ch chan any
 			var err error
-			if ch, err = d.channels.GetChannel(outputs[i]); err != nil {
+			if ch, err = d.channels.get(outputs[i]); err != nil {
 				continue
 			}
 			chs[i] = ch
@@ -465,7 +436,7 @@ func (d *DAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 func (d *DAG[TInput, TOutput]) CloseWorkflow() {
 	d.muChannels.Lock()
 	defer d.muChannels.Unlock()
-	d.channels.CloseAll()
+	d.channels = nil
 }
 
 // Execute the workflow.
@@ -522,4 +493,14 @@ func (d *DAG[TInput, TOutput]) Execute(root context.Context, input *TInput) *TOu
 func (d *DAG[TInput, TOutput]) RunOnce(ctx context.Context, input *TInput) *TOutput {
 	defer d.CloseWorkflow()
 	return d.Execute(ctx, input)
+}
+
+// Cancel an executing workflow. If there are no workflow executing, there will be no impact.
+func (d *DAG[TInput, TOutput]) Cancel(cause error) {
+	d.muContext.RLock()
+	defer d.muContext.RUnlock()
+	if d.context == nil {
+		return
+	}
+	d.context.Cancel(cause)
 }

@@ -33,7 +33,7 @@ func WithChannels[TInput, TOutput any](names ...string) Option[TInput, TOutput] 
 		if d.channels == nil {
 			d.channels = NewDAGChannels()
 		}
-		return d.channels.Add(names...)
+		return d.channels.add(names...)
 	}
 }
 
@@ -83,7 +83,7 @@ func WithDefaultChannels[TInput, TOutput any]() Option[TInput, TOutput] {
 		if d.channels == nil {
 			d.channels = NewDAGChannels()
 		}
-		d.channels.Add("input", "output")
+		d.channels.add("input", "output")
 		d.channels.channelInput = "input"
 		d.channels.channelOutput = "output"
 		return nil
