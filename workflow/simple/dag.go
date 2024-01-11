@@ -157,15 +157,15 @@ func (d *Channels) exists(name string) bool {
 	return false
 }
 
-// GetChannel gets the specified name of channel.
+// get the specified name of channel.
 // Before calling, you must ensure that the channel list has been initialized
 // and the specified channel exists, otherwise an error will be reported.
 func (d *Channels) get(name string) (chan any, error) {
 	if d == nil {
 		return nil, ErrChannelNotInitialized
 	}
-	d.muChannels.RLock()
-	defer d.muChannels.RUnlock()
+	// d.muChannels.RLock()
+	//defer d.muChannels.RUnlock()
 	if d.channels == nil {
 		return nil, ErrChannelNotInitialized
 	}
@@ -175,7 +175,7 @@ func (d *Channels) get(name string) (chan any, error) {
 	return d.channels[name], nil
 }
 
-// Add channels.
+// add channels.
 // Note that the channel name to be added cannot already exist. Otherwise, `ErrChannelNameExisted` will be returned.
 func (d *Channels) add(names ...string) error {
 	if d == nil {
@@ -265,11 +265,26 @@ func (d *DAG[TInput, TOutput]) AttachWorkflowTransit(transits ...*Transit) {
 func (d *DAG[TInput, TOutput]) BuildWorkflowInput(ctx context.Context, result any, inputs ...string) {
 	d.muChannels.RLock()
 	defer d.muChannels.RUnlock()
+	var chs = make([]chan any, len(inputs))
+	{
+		d.muChannels.RLock()
+		defer d.muChannels.RUnlock()
+
+		if d.channels == nil {
+			return
+		}
+		for i := 0; i < len(inputs); i++ {
+			i := i
+			if ch, err := d.channels.get(inputs[i]); err == nil {
+				chs[i] = ch
+			}
+		}
+	}
 	for i := 0; i < len(inputs); i++ {
 		i := i
 		go func() {
-			if ch, err := d.channels.get(inputs[i]); err == nil {
-				ch <- result
+			if chs[i] != nil {
+				chs[i] <- result
 			}
 		}()
 	}
@@ -295,12 +310,9 @@ func (d *DAG[TInput, TOutput]) BuildWorkflowOutput(ctx context.Context, outputs 
 		}
 		for i := 0; i < count; i++ {
 			i := i
-			var ch chan any
-			var err error
-			if ch, err = d.channels.get(outputs[i]); err != nil {
-				continue
+			if ch, err := d.channels.get(outputs[i]); err == nil {
+				chs[i] = ch
 			}
-			chs[i] = ch
 		}
 	}
 	var wg sync.WaitGroup
