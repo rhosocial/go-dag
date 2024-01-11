@@ -76,6 +76,8 @@ func WithChannelOutput[TInput, TOutput any](name string) Option[TInput, TOutput]
 }
 
 // WithDefaultChannels defines the input and output channel for the workflow.
+// Note that this method can be placed before or after the WithChannels(). But if it is placed before it,
+// you need to ensure that the subsequent WithChannels() does not mention "input" and "output" again.
 func WithDefaultChannels[TInput, TOutput any]() Option[TInput, TOutput] {
 	return func(d *DAG[TInput, TOutput]) error {
 		if d.channels == nil {

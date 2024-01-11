@@ -124,6 +124,7 @@ type ChannelsInterface interface {
 	Send(name string, value any) error
 	Add(names ...string) error
 	Exists(name string) bool
+	CloseAll()
 }
 
 // Channels defines the channelInputs used by this directed acyclic graph.
@@ -144,6 +145,17 @@ func NewDAGChannels() *Channels {
 	return &Channels{
 		channels: make(map[string]chan any),
 	}
+}
+
+func (d *Channels) CloseAll() {
+	d.muChannels.Lock()
+	defer d.muChannels.Unlock()
+
+	if d.channels == nil {
+		return
+	}
+
+	d.channels = nil
 }
 
 func (d *Channels) exists(name string) bool {
@@ -284,13 +296,10 @@ func (d *DAG[TInput, TOutput]) BuildWorkflowInput(ctx context.Context, result an
 	defer d.muChannels.RUnlock()
 	for i := 0; i < len(inputs); i++ {
 		i := i
-		var ch chan any
-		var err error
-		if ch, err = d.channels.GetChannel(inputs[i]); err != nil {
-			return
-		}
 		go func() {
-			ch <- result
+			if ch, err := d.channels.GetChannel(inputs[i]); err == nil {
+				ch <- result
+			}
 		}()
 	}
 }
@@ -456,24 +465,7 @@ func (d *DAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 func (d *DAG[TInput, TOutput]) CloseWorkflow() {
 	d.muChannels.Lock()
 	defer d.muChannels.Unlock()
-	if d.channels == nil {
-		return
-	}
-
-	d.channels.muChannels.RLock()
-	defer d.channels.muChannels.RUnlock()
-	if len(d.channels.channelInput) == 0 {
-		return
-	}
-	close(d.channels.channels[d.channels.channelInput])
-	if len(d.channels.channelOutput) == 0 {
-		return
-	}
-	//close(d.channels[d.channelOutput])
-	if len(d.transits.workflowTransits) == 0 {
-		return
-	}
-	d.channels = nil
+	d.channels.CloseAll()
 }
 
 // Execute the workflow.
