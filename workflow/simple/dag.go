@@ -56,24 +56,10 @@ type Transit struct {
 }
 
 type DAGInitInterface interface {
-	// InitChannels initializes the channelInputs that the workflow should have. All channelInputs are unbuffered.
-	//
-	// @param channels The parameter is the channel channelInputs and cannot be repeated.
-	InitChannels(channels ...string) error
-
 	// AttachChannels attaches additional channel names. All channelInputs are unbuffered.
 	//
 	// If the channel channelInputs already exists, the channel will be recreated.
 	AttachChannels(channels ...string) error
-
-	// InitWorkflow initializes the workflow.
-	//
-	// Among the parameters, input indicates the channelInputs of the input channel,
-	// output indicates the channelInputs of the output channel, and transits indicates the transit node.
-	//
-	// Before executing this method, the corresponding channel(s) must be prepared.
-	// And it must be ensured that all created channelInputs can be used. Otherwise, unforeseen consequences may occur.
-	InitWorkflow(input string, output string, transits ...*Transit)
 
 	// AttachWorkflowTransit attaches additional transit node of workflow.
 	AttachWorkflowTransit(...*Transit)
@@ -268,50 +254,25 @@ type DAG[TInput, TOutput any] struct {
 	DAGInterface[TInput, TOutput]
 }
 
-// NewDAGWithLogger instantiates a workflow with logger.
-func NewDAGWithLogger[TInput, TOutput any](logger LoggerInterface) *DAG[TInput, TOutput] {
-	return &DAG[TInput, TOutput]{channels: NewDAGChannels(), logger: logger}
-}
-
-// InitChannels initializes the channels.
-// The parameter `channels` is the name list of the channels to be initialized for the first time, and the order of
-// each element is irrelevant.
-// You can pass no parameters, but it is strongly not recommended unless you know the consequences of doing so.
-// Generally, you need to specify at least the input and output channels of the workflow.
-func (d *DAG[TInput, TOutput]) InitChannels(channels ...string) error {
-	d.channels = NewDAGChannels()
-	return d.AttachChannels(channels...)
-}
-
 // AttachChannels attaches the channels to the workflow.
 // The parameter `channels` is the name list of the channels to be initialized for the first time, and the order of
 // each element is irrelevant. If you don't pass any parameter, it will have no effect.
 func (d *DAG[TInput, TOutput]) AttachChannels(channels ...string) error {
+	if d.channels == nil {
+		d.channels = NewDAGChannels()
+	}
 	if channels == nil || len(channels) == 0 {
 		return nil
 	}
 	return d.channels.Add(channels...)
 }
 
-// InitWorkflow initializes the workflow.
-// Input and output channel names need to be specified first. The corresponding channel must already exist.
-// Next is the transit list. If this parameter is not passed in, there will be no transit.
-func (d *DAG[TInput, TOutput]) InitWorkflow(input string, output string, transits ...*Transit) {
-	d.channels.channelInput = input
-	d.channels.channelOutput = output
-	lenTransits := len(transits)
-	d.transits = &Transits{workflowTransits: make([]*Transit, lenTransits)}
-	if lenTransits == 0 {
-		return
-	}
-	for i, t := range transits {
-		d.transits.workflowTransits[i] = t
-	}
-}
-
 // AttachWorkflowTransit attaches the transits to the workflow.
 // The parameter transits represents a list of transit definitions, and the order of each element is irrelevant.
 func (d *DAG[TInput, TOutput]) AttachWorkflowTransit(transits ...*Transit) {
+	if d.transits == nil {
+		d.transits = &Transits{}
+	}
 	d.transits.workflowTransits = append(d.transits.workflowTransits, transits...)
 }
 
@@ -344,21 +305,36 @@ func (d *DAG[TInput, TOutput]) BuildWorkflowInput(ctx context.Context, result an
 func (d *DAG[TInput, TOutput]) BuildWorkflowOutput(ctx context.Context, outputs ...string) *[]any {
 	var count = len(outputs)
 	var results = make([]any, count)
+	var chs = make([]chan any, count)
+	{
+		d.muChannels.RLock()
+		defer d.muChannels.RUnlock()
+
+		if d.channels == nil {
+			return &results
+		}
+		for i := 0; i < count; i++ {
+			i := i
+			var ch chan any
+			var err error
+			if ch, err = d.channels.GetChannel(outputs[i]); err != nil {
+				continue
+			}
+			chs[i] = ch
+		}
+	}
 	var wg sync.WaitGroup
 	wg.Add(count)
 	for i := 0; i < count; i++ {
 		i := i
-		var ch chan any
-		var err error
-		if ch, err = d.channels.GetChannel(outputs[i]); err != nil {
-			wg.Done()
-			continue
-		}
 		go func() {
 			defer wg.Done()
+			if chs[i] == nil {
+				return
+			}
 			for { // always check the done notification.
 				select {
-				case results[i] = <-ch:
+				case results[i] = <-chs[i]:
 					return
 				case <-ctx.Done():
 					return // return immediately if done received and no longer wait for the channel.
