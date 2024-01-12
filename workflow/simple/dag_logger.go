@@ -20,30 +20,35 @@ const (
 )
 
 type LogEventInterface interface {
-	Transit() *Transit
+	Name() string
 	Level() LogLevel
 	Message() string
 }
 
-type LogEventErrValueType struct {
+type LogEventTransitInterface interface {
+	Transit() *Transit
+}
+
+type LogEventFinalErrValueType struct {
 	LogEventInterface
 	err ErrValueType
 }
 
-func (l *LogEventErrValueType) Message() string {
+func (l *LogEventFinalErrValueType) Message() string {
 	return l.err.Error()
 }
 
-func (l *LogEventErrValueType) Level() LogLevel {
+func (l *LogEventFinalErrValueType) Level() LogLevel {
 	return LevelError
 }
 
-func (l *LogEventErrValueType) Transit() *Transit {
-	return nil
+func (l *LogEventFinalErrValueType) Name() string {
+	return "final chn"
 }
 
 type LogEventTransitReportedError struct {
 	LogEventInterface
+	LogEventTransitInterface
 	err     error
 	transit *Transit
 }
@@ -60,8 +65,16 @@ func (l *LogEventTransitReportedError) Transit() *Transit {
 	return l.transit
 }
 
+func (l *LogEventTransitReportedError) Name() string {
+	if l.transit == nil {
+		return "<nil>"
+	}
+	return l.transit.name
+}
+
 type LogEventTransitStart struct {
 	LogEventInterface
+	LogEventTransitInterface
 	transit *Transit
 }
 
@@ -77,8 +90,16 @@ func (l *LogEventTransitStart) Level() LogLevel {
 	return LevelDebug
 }
 
+func (l *LogEventTransitStart) Name() string {
+	if l.transit == nil {
+		return "<nil>"
+	}
+	return l.transit.name
+}
+
 type LogEventTransitEnd struct {
 	LogEventInterface
+	LogEventTransitInterface
 	transit *Transit
 }
 
@@ -94,8 +115,16 @@ func (l *LogEventTransitEnd) Level() LogLevel {
 	return LevelDebug
 }
 
+func (l *LogEventTransitEnd) Name() string {
+	if l.transit == nil {
+		return "<nil>"
+	}
+	return l.transit.name
+}
+
 type LogEventTransitCanceled struct {
 	LogEventInterface
+	LogEventTransitInterface
 	transit *Transit
 }
 
@@ -111,8 +140,16 @@ func (l *LogEventTransitCanceled) Level() LogLevel {
 	return LevelWarning
 }
 
+func (l *LogEventTransitCanceled) Name() string {
+	if l.transit == nil {
+		return "<nil>"
+	}
+	return l.transit.name
+}
+
 type LogEventTransitWorkerPanicked struct {
 	LogEventInterface
+	LogEventTransitInterface
 	transit *Transit
 	err     ErrWorkerPanicked
 }
@@ -127,6 +164,12 @@ func (l *LogEventTransitWorkerPanicked) Transit() *Transit {
 
 func (l *LogEventTransitWorkerPanicked) Level() LogLevel {
 	return LevelError
+}
+func (l *LogEventTransitWorkerPanicked) Name() string {
+	if l.transit == nil {
+		return "<nil>"
+	}
+	return l.transit.name
 }
 
 // LoggerInterface defines the logging method and the parameters required by the logger.
@@ -177,12 +220,7 @@ func (l *Logger) logEvent(ctx context.Context, event LogEventInterface) {
 	} else if event.Level() == LevelError {
 		color = red
 	}
-	transit := event.Transit()
-	name := "<nil>"
-	if transit != nil {
-		name = transit.name
-	}
-	fmt.Printf("[GO-DAG] %v |%s %10s %s| %s\n", time.Now().Format(l.params.TimestampFormat), color, name, reset, event.Message())
+	fmt.Printf("[GO-DAG] %v |%s %10s %s| %s\n", time.Now().Format(l.params.TimestampFormat), color, event.Name(), reset, event.Message())
 }
 
 func (l *Logger) Log(ctx context.Context, events ...LogEventInterface) {

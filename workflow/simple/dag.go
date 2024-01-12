@@ -119,6 +119,9 @@ type DAGInterface[TInput, TOutput any] interface {
 
 	// Cancel an executing workflow. If there are no workflows executing, there will be no impact.
 	Cancel(cause error)
+
+	// Log a log.
+	Log(ctx context.Context, events ...LogEventInterface)
 }
 
 type ChannelsInterface interface {
@@ -516,7 +519,7 @@ func (d *DAG[TInput, TOutput]) Execute(root context.Context, input *TInput) *TOu
 		} else {
 			var a = new(TOutput)
 			var e = ErrValueType{actual: (*r)[0], expect: *a}
-			d.Log(ctx, &LogEventErrValueType{err: e})
+			d.Log(ctx, &LogEventFinalErrValueType{err: e})
 			results = nil
 		}
 	}(ctx)
