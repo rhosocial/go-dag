@@ -7,6 +7,7 @@ package simple
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 )
 
@@ -25,32 +26,54 @@ type LogEventInterface interface {
 	Message() string
 }
 
+type LogEventErrorInterface interface {
+	Error() error
+}
+
 type LogEventTransitInterface interface {
 	Transit() *Transit
 }
 
-type LogEventFinalErrValueType struct {
-	LogEventInterface
-	err ErrValueType
+type LogEventError struct {
+	LogEventErrorInterface
+	err error
 }
 
-func (l *LogEventFinalErrValueType) Message() string {
+func NewLogEventError(err error) *LogEventError {
+	return &LogEventError{err: err}
+}
+
+func (l *LogEventError) Error() error {
+	return l.err
+}
+
+type LogEventErrorValueTypeMismatch struct {
+	LogEventInterface
+	LogEventError
+	err ErrValueTypeMismatch
+}
+
+func (l *LogEventErrorValueTypeMismatch) Message() string {
 	return l.err.Error()
 }
 
-func (l *LogEventFinalErrValueType) Level() LogLevel {
+func (l *LogEventErrorValueTypeMismatch) Level() LogLevel {
 	return LevelError
 }
 
-func (l *LogEventFinalErrValueType) Name() string {
+func (l *LogEventErrorValueTypeMismatch) Name() string {
 	return "final chn"
 }
 
 type LogEventTransitReportedError struct {
 	LogEventInterface
 	LogEventTransitInterface
-	err     error
+	LogEventError
 	transit *Transit
+}
+
+func NewLogEventTransitReportedError(transit *Transit, err error) *LogEventTransitReportedError {
+	return &LogEventTransitReportedError{transit: transit, LogEventError: *NewLogEventError(err)}
 }
 
 func (l *LogEventTransitReportedError) Message() string {
@@ -125,6 +148,7 @@ func (l *LogEventTransitEnd) Name() string {
 type LogEventTransitCanceled struct {
 	LogEventInterface
 	LogEventTransitInterface
+	LogEventError
 	transit *Transit
 }
 
@@ -150,6 +174,7 @@ func (l *LogEventTransitCanceled) Name() string {
 type LogEventTransitWorkerPanicked struct {
 	LogEventInterface
 	LogEventTransitInterface
+	LogEventError
 	transit *Transit
 	err     ErrWorkerPanicked
 }
@@ -175,6 +200,7 @@ func (l *LogEventTransitWorkerPanicked) Name() string {
 // LoggerInterface defines the logging method and the parameters required by the logger.
 // For specific usage, please refer to Logger.
 type LoggerInterface interface {
+	// Log an event.
 	Log(ctx context.Context, events ...LogEventInterface)
 
 	SetFlags(uint)
@@ -228,3 +254,62 @@ func (l *Logger) Log(ctx context.Context, events ...LogEventInterface) {
 		l.logEvent(ctx, event)
 	}
 }
+
+// ErrorCollectorInterface defines the methods that error collectors should implement.
+// It is also a logger, so it also needs to implement all methods specified by the LoggerInterface.
+type ErrorCollectorInterface interface {
+	LoggerInterface
+	Listen(ctx context.Context)
+	Get() []LogEventErrorInterface
+
+	Append(event *LogEventErrorInterface)
+}
+
+type ErrorCollector struct {
+	ErrorCollectorInterface
+	mu       sync.RWMutex
+	errors   []LogEventErrorInterface
+	listener chan LogEventErrorInterface
+}
+
+func NewErrorCollector() *ErrorCollector {
+	return &ErrorCollector{
+		errors:   make([]LogEventErrorInterface, 0),
+		listener: make(chan LogEventErrorInterface),
+	}
+}
+
+func (l *ErrorCollector) Listen(ctx context.Context) {
+	var e LogEventErrorInterface
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case e = <-l.listener:
+			l.Append(&e)
+		default:
+		}
+	}
+}
+
+func (l *ErrorCollector) Get() []LogEventErrorInterface {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.errors
+}
+
+func (l *ErrorCollector) Append(event *LogEventErrorInterface) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.errors = append(l.errors, *event)
+}
+
+func (l *ErrorCollector) Log(ctx context.Context, events ...LogEventInterface) {
+	for _, event := range events {
+		if e, ok := event.(LogEventErrorInterface); ok && event != nil {
+			l.listener <- e
+		}
+	}
+}
+
+func (l *ErrorCollector) SetFlags(uint) {}

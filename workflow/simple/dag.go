@@ -458,7 +458,7 @@ func (d *DAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 			}(t)
 			d.Log(ctx, &LogEventTransitEnd{transit: t})
 			if err != nil {
-				d.Log(ctx, &LogEventTransitReportedError{transit: t, err: err})
+				d.Log(ctx, NewLogEventTransitReportedError(t, err))
 				d.context.Cancel(err)
 				return
 			}
@@ -518,8 +518,8 @@ func (d *DAG[TInput, TOutput]) Execute(root context.Context, input *TInput) *TOu
 			results = &ra
 		} else {
 			var a = new(TOutput)
-			var e = ErrValueType{actual: (*r)[0], expect: *a}
-			d.Log(ctx, &LogEventFinalErrValueType{err: e})
+			var e = ErrValueTypeMismatch{actual: (*r)[0], expect: *a}
+			d.Log(ctx, &LogEventErrorValueTypeMismatch{err: e})
 			results = nil
 		}
 	}(ctx)

@@ -50,14 +50,14 @@ func (e *ErrChannelNameExisted) Error() string {
 	return fmt.Sprintf("the channel[%s] has existed.", e.name)
 }
 
-// ErrValueType defines that the data type output by the node is inconsistent with expectation.
-type ErrValueType struct {
+// ErrValueTypeMismatch defines that the data type output by the node is inconsistent with expectation.
+type ErrValueTypeMismatch struct {
 	expect any
 	actual any
 	error
 }
 
-func (e ErrValueType) Error() string {
+func (e ErrValueTypeMismatch) Error() string {
 	return fmt.Sprintf("The type of the value [%s] is inconsistent with expectation [%s].",
 		reflect.TypeOf(e.actual), reflect.TypeOf(e.expect))
 }
