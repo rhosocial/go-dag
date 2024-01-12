@@ -18,7 +18,7 @@ import (
 
 func TestSimpleDAGChannel_Exists(t *testing.T) {
 	f, _ := NewDAG[string, string](
-		WithLogger[string, string](NewLogger()))
+		WithLoggers[string, string](NewLogger()))
 	assert.False(t, f.channels.exists("input"))
 	assert.False(t, f.channels.exists("output"))
 	//f.InitChannels("input", "output")
@@ -52,7 +52,7 @@ func TestSimpleDAGValueTypeError_Error(t *testing.T) {
 				return 0.1, nil
 			},
 		}),
-		WithLogger[string, string](logger))
+		WithLoggers[string, string](logger))
 	input := "input"
 	assert.Nil(t, f.Execute(context.Background(), &input))
 	assert.Nil(t, f.RunOnce(context.Background(), &input))
@@ -103,7 +103,7 @@ func NewDAGTwoParallelTransitsWithLogger() *DAG[string, string] {
 				return r, nil
 			},
 		}),
-		WithLogger[string, string](NewLogger()))
+		WithLoggers[string, string](NewLogger()))
 	return f
 }
 
@@ -275,7 +275,7 @@ func NewDAGOneStraightPipeline() *DAG[string, string] {
 	f, _ := NewDAG[string, string](
 		WithDefaultChannels[string, string](),
 		WithChannels[string, string]("t11"),
-		WithLogger[string, string](NewLogger()))
+		WithLoggers[string, string](NewLogger()))
 	return f
 }
 
@@ -307,7 +307,7 @@ func TestSimpleDAGOneStraightPipeline(t *testing.T) {
 // NewDAGThreeParallelDelayedTransits defines a workflow.
 func NewDAGThreeParallelDelayedTransits() *DAG[string, string] {
 	f, err := NewDAG[string, string](
-		WithLogger[string, string](NewLogger()),
+		WithLoggers[string, string](NewLogger()),
 		WithChannels[string, string]("input", "t11", "t12", "t13", "t21", "t22", "t23", "output"),
 		WithDefaultChannels[string, string](),
 	)
@@ -474,7 +474,7 @@ func TestMultiDifferentTimeConsumingTasks(t *testing.T) {
 		WithChannels[int, int]("input", "t11", "output"),
 		WithDefaultChannels[int, int](),
 		WithTransits[int, int](transits...),
-		WithLogger[int, int](NewLogger()))
+		WithLoggers[int, int](NewLogger()))
 	t.Run("1s per task", func(t *testing.T) {
 		input := 1
 		output := f.Execute(context.Background(), &input)
@@ -527,7 +527,7 @@ func TestMultiDifferentTimeConsumingTasks(t *testing.T) {
 		WithChannels[int, int]("input", "t11", "output"),
 		WithDefaultChannels[int, int](),
 		WithTransits[int, int](transits...),
-		WithLogger[int, int](NewLogger()))
+		WithLoggers[int, int](NewLogger()))
 	t.Run("1s and 2s per task in different workflow", func(t *testing.T) {
 		input1 := 2
 		input2 := 1
@@ -580,7 +580,7 @@ func TestNestedWorkflow(t *testing.T) {
 			WithDefaultChannels[int, int](),
 			WithChannels[int, int]("t11"),
 			WithTransits[int, int](transits...),
-			WithLogger[int, int](NewLogger()))
+			WithLoggers[int, int](NewLogger()))
 		input := 1
 		output := f1.Execute(ctx, &input)
 		return *output, nil
@@ -604,7 +604,7 @@ func TestNestedWorkflow(t *testing.T) {
 		WithDefaultChannels[int, int](),
 		WithChannels[int, int]("t11", "t12"),
 		WithTransits[int, int](transits...),
-		WithLogger[int, int](NewLogger()))
+		WithLoggers[int, int](NewLogger()))
 	input := 1
 	output := f.Execute(context.Background(), &input)
 	assert.NotNil(t, output)
@@ -643,7 +643,7 @@ func TestErrWorkerPanicked_Error(t *testing.T) {
 	f, _ := NewDAG[int, int](
 		WithChannels[int, int]("t11", "t12"),
 		WithTransits[int, int](transits...),
-		WithLogger[int, int](NewLogger()))
+		WithLoggers[int, int](NewLogger()))
 	input := 1
 	output := f.Execute(context.Background(), &input)
 	assert.Nil(t, output)
@@ -683,7 +683,7 @@ func TestNewDAGByChainingMethodStyle(t *testing.T) {
 		WithChannelInput[int, int]("input"),
 		WithChannelOutput[int, int]("output"),
 		WithTransits[int, int](transits...),
-		WithLogger[int, int](logger),
+		WithLoggers[int, int](logger),
 	)
 	input := 1
 	output := f.Execute(context.Background(), &input)
@@ -720,7 +720,7 @@ func TestCancelWorkflow(t *testing.T) {
 		WithChannelInput[int, int]("input"),
 		WithChannelOutput[int, int]("output"),
 		WithTransits[int, int](transits...),
-		WithLogger[int, int](logger),
+		WithLoggers[int, int](logger),
 	)
 	input := 1
 	t.Run("cancel before run", func(t *testing.T) {
@@ -763,7 +763,7 @@ func TestCancelWorkflowWithNestedWorkflow(t *testing.T) {
 			WithDefaultChannels[int, int](),
 			WithChannels[int, int]("t11"),
 			WithTransits[int, int](transits...),
-			WithLogger[int, int](logger))
+			WithLoggers[int, int](logger))
 		input := 1
 		output := f1.Execute(ctx, &input)
 		if output == nil {
@@ -790,7 +790,7 @@ func TestCancelWorkflowWithNestedWorkflow(t *testing.T) {
 		WithDefaultChannels[int, int](),
 		WithChannels[int, int]("t11", "t12"),
 		WithTransits[int, int](transits...),
-		WithLogger[int, int](logger))
+		WithLoggers[int, int](logger))
 	input := 1
 	t.Run("cancel before run", func(t *testing.T) {
 		f.Cancel(errors.New("cancel before run"))

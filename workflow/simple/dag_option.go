@@ -110,10 +110,10 @@ func WithTransits[TInput, TOutput any](transits ...*Transit) Option[TInput, TOut
 	}
 }
 
-// WithLogger specifies the Logger for the entire workflow.
+// WithLoggers specifies the Logger for the entire workflow.
 //
 // This method can be executed multiple times. The ones executed later will be merged with the ones executed earlier.
-func WithLogger[TInput, TOutput any](loggers ...LoggerInterface) Option[TInput, TOutput] {
+func WithLoggers[TInput, TOutput any](loggers ...LoggerInterface) Option[TInput, TOutput] {
 	return func(d *DAG[TInput, TOutput]) error {
 		d.muLoggers.Lock()
 		defer d.muLoggers.Unlock()
@@ -177,7 +177,7 @@ func WithWorker(worker func(context.Context, ...any) (any, error)) TransitOption
 // LoggerOption defines the option used to instantiate a Logger.
 type LoggerOption func(d *Logger)
 
-// NewLogger instantiates a Logger. Its return value can be used as a parameter to WithLogger().
+// NewLogger instantiates a Logger. Its return value can be used as a parameter to WithLoggers().
 func NewLogger(options ...LoggerOption) *Logger {
 	logger := &Logger{}
 	if len(options) == 0 {
