@@ -32,6 +32,7 @@ var ErrChannelOutputEmpty = errors.New("the output channel is empty")
 
 // ErrWorkerPanicked reports when the worker is panicked.
 type ErrWorkerPanicked struct {
+	panic any
 	error
 }
 

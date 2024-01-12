@@ -32,7 +32,10 @@ func TestSimpleDAGChannel_Exists(t *testing.T) {
 }
 
 func TestSimpleDAGValueTypeError_Error(t *testing.T) {
+	logger := NewLogger()
+	logger.SetFlags(LDebugEnabled)
 	f, _ := NewDAG[string, string](
+		WithDefaultChannels[string, string](),
 		WithChannels[string, string]("t11"),
 		WithTransits[string, string](&Transit{
 			name:           "input",
@@ -49,7 +52,7 @@ func TestSimpleDAGValueTypeError_Error(t *testing.T) {
 				return 0.1, nil
 			},
 		}),
-		WithLogger[string, string](NewLogger()))
+		WithLogger[string, string](logger))
 	input := "input"
 	assert.Nil(t, f.Execute(context.Background(), &input))
 	assert.Nil(t, f.RunOnce(context.Background(), &input))

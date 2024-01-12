@@ -98,13 +98,13 @@ func WithTransits[TInput, TOutput any](transits ...*Transit) Option[TInput, TOut
 	return func(d *DAG[TInput, TOutput]) error {
 		lenTransits := len(transits)
 		if d.transits == nil {
-			d.transits = &Transits{workflowTransits: make([]*Transit, lenTransits)}
+			d.transits = &Transits{transits: make([]*Transit, lenTransits)}
 		}
 		if lenTransits == 0 {
 			return nil
 		}
 		for i, t := range transits {
-			d.transits.workflowTransits[i] = t
+			d.transits.transits[i] = t
 		}
 		return nil
 	}
@@ -112,10 +112,17 @@ func WithTransits[TInput, TOutput any](transits ...*Transit) Option[TInput, TOut
 
 // WithLogger specifies the Logger for the entire workflow.
 //
-// This method can be executed multiple times. The ones executed later will overwrite the ones executed earlier.
-func WithLogger[TInput, TOutput any](logger LoggerInterface) Option[TInput, TOutput] {
+// This method can be executed multiple times. The ones executed later will be merged with the ones executed earlier.
+func WithLogger[TInput, TOutput any](loggers ...LoggerInterface) Option[TInput, TOutput] {
 	return func(d *DAG[TInput, TOutput]) error {
-		d.logger = logger
+		d.muLoggers.Lock()
+		defer d.muLoggers.Unlock()
+		if d.loggers == nil {
+			d.loggers = &Loggers{}
+		}
+		for _, logger := range loggers {
+			d.loggers.loggers = append(d.loggers.loggers, logger)
+		}
 		return nil
 	}
 }

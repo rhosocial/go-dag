@@ -217,8 +217,27 @@ func (d *Context) Cancel(cause error) {
 }
 
 type Transits struct {
-	muTransits       sync.RWMutex
-	workflowTransits []*Transit
+	muTransits sync.RWMutex
+	transits   []*Transit
+}
+
+type Loggers struct {
+	muLoggers sync.RWMutex
+	loggers   []LoggerInterface
+}
+
+func (d *Loggers) Log(ctx context.Context, events ...LogEventInterface) {
+	d.muLoggers.RLock()
+	defer d.muLoggers.RUnlock()
+	if d.loggers == nil || len(d.loggers) == 0 {
+		return
+	}
+	for _, logger := range d.loggers {
+		if logger == nil {
+			continue
+		}
+		logger.Log(ctx, events...)
+	}
 }
 
 // DAG defines a generic directed acyclic graph of proposals.
@@ -233,8 +252,21 @@ type DAG[TInput, TOutput any] struct {
 	context    *Context
 	muTransits sync.RWMutex
 	transits   *Transits
-	logger     LoggerInterface
+	muLoggers  sync.RWMutex
+	loggers    *Loggers
 	DAGInterface[TInput, TOutput]
+}
+
+func (d *DAG[TInput, TOutput]) Log(ctx context.Context, events ...LogEventInterface) {
+	if events == nil || len(events) == 0 {
+		return
+	}
+	d.muLoggers.RLock()
+	defer d.muLoggers.RUnlock()
+	if d.loggers == nil {
+		return
+	}
+	d.loggers.Log(ctx, events...)
 }
 
 // AttachChannels attaches the channels to the workflow.
@@ -256,7 +288,7 @@ func (d *DAG[TInput, TOutput]) AttachWorkflowTransit(transits ...*Transit) {
 	if d.transits == nil {
 		d.transits = &Transits{}
 	}
-	d.transits.workflowTransits = append(d.transits.workflowTransits, transits...)
+	d.transits.transits = append(d.transits.transits, transits...)
 }
 
 // BuildWorkflowInput feeds the result to each input channel in turn.
@@ -375,10 +407,10 @@ func (d *DAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 	d.transits.muTransits.RLock()
 	defer d.transits.muTransits.RUnlock()
 	// Checks the Transits
-	if len(d.transits.workflowTransits) == 0 {
+	if len(d.transits.transits) == 0 {
 		return nil
 	}
-	for _, t := range d.transits.workflowTransits {
+	for _, t := range d.transits.transits {
 		for _, name := range t.channelInputs {
 			if _, existed := d.channels.channels[name]; !existed {
 				return &ErrChannelNotExist{name: name}
@@ -391,7 +423,7 @@ func (d *DAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 		}
 	}
 
-	for _, t := range d.transits.workflowTransits {
+	for _, t := range d.transits.transits {
 		go func(ctx context.Context, t *Transit) {
 			// Waiting for the results of input channels to be ready.
 			// If there is a channel with no output, the current coroutine will be blocked here.
@@ -399,9 +431,7 @@ func (d *DAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 			results := d.BuildWorkflowOutput(ctx, t.channelInputs...)
 			select {
 			case <-ctx.Done(): // If the cancellation notification has been received, it will exit directly.
-				if d.logger != nil {
-					d.logger.Trace(ctx, LevelWarning, t, "cancellation notified.")
-				}
+				d.Log(ctx, &LogEventTransitCanceled{transit: t})
 				return
 			default:
 				//log.Println("build workflow:", t.channelInputs, " selected.")
@@ -412,28 +442,20 @@ func (d *DAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 			var work = func(t *Transit) (any, error) {
 				return t.worker(workerCtx, *results...)
 			}
-			if d.logger != nil {
-				d.logger.Trace(ctx, LevelDebug, t, "is starting...")
-			}
+			d.Log(ctx, &LogEventTransitStart{transit: t})
 			var result, err = func(t *Transit) (any, error) {
 				defer func() {
 					if err := recover(); err != nil {
-						e := ErrWorkerPanicked{}
-						if d.logger != nil {
-							d.logger.Trace(ctx, LevelError, t, e.Error(), err)
-						}
+						e := ErrWorkerPanicked{panic: err}
+						d.Log(ctx, &LogEventTransitWorkerPanicked{transit: t, err: e})
 						d.context.Cancel(&e)
 					}
 				}()
 				return work(t)
 			}(t)
-			if d.logger != nil {
-				d.logger.Trace(ctx, LevelDebug, t, "ended.")
-			}
+			d.Log(ctx, &LogEventTransitEnd{transit: t})
 			if err != nil {
-				if d.logger != nil {
-					d.logger.Trace(ctx, LevelWarning, t, "worker error(s) reported.", err)
-				}
+				d.Log(ctx, &LogEventTransitReportedError{transit: t, err: err})
 				d.context.Cancel(err)
 				return
 			}
@@ -450,6 +472,10 @@ func (d *DAG[TInput, TOutput]) CloseWorkflow() {
 	defer d.muChannels.Unlock()
 	d.channels = nil
 }
+
+const (
+	DAGContextLogger = "logger"
+)
 
 // Execute the workflow.
 //
@@ -490,9 +516,7 @@ func (d *DAG[TInput, TOutput]) Execute(root context.Context, input *TInput) *TOu
 		} else {
 			var a = new(TOutput)
 			var e = ErrValueType{actual: (*r)[0], expect: *a}
-			if d.logger != nil {
-				d.logger.Log(ctx, LevelError, e.Error(), e, e.actual, e.expect)
-			}
+			d.Log(ctx, &LogEventErrValueType{err: e})
 			results = nil
 		}
 	}(ctx)
