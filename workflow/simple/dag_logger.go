@@ -262,7 +262,7 @@ type ErrorCollectorInterface interface {
 	Listen(ctx context.Context)
 	Get() []LogEventErrorInterface
 
-	Append(event *LogEventErrorInterface)
+	append(event *LogEventErrorInterface)
 }
 
 type ErrorCollector struct {
@@ -286,7 +286,7 @@ func (l *ErrorCollector) Listen(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case e = <-l.listener:
-			l.Append(&e)
+			l.append(&e)
 		default:
 		}
 	}
@@ -298,7 +298,7 @@ func (l *ErrorCollector) Get() []LogEventErrorInterface {
 	return l.errors
 }
 
-func (l *ErrorCollector) Append(event *LogEventErrorInterface) {
+func (l *ErrorCollector) append(event *LogEventErrorInterface) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.errors = append(l.errors, *event)
