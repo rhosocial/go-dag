@@ -20,181 +20,138 @@ const (
 	LevelError
 )
 
+// LogEventInterface represents the interface for log events. All log events need to implement the following three interfaces.
 type LogEventInterface interface {
+	// Name represents the name of the event.
+	// The name is recommended to be a fixed enumeration value, such as the name of the transit.
+	// The specific error type can be determined by its name. Empty or too long is not recommended.
 	Name() string
+
+	// Level represents the level of the event. The log level can refer to the already defined log level constant.
 	Level() LogLevel
+
+	// Message represents the message of the event. This content can be very detailed.
 	Message() string
 }
 
+// LogEventErrorInterface represents the interface for log events for error.
 type LogEventErrorInterface interface {
+	// Error returns the error.
 	Error() error
 }
 
+// LogEventTransitInterface represents the log event triggered by transit.
 type LogEventTransitInterface interface {
+	// Transit returns the transit that triggered the event. nil is not recommended.
 	Transit() *Transit
 }
 
+// LogEventError provides a unified implementation for error events.
 type LogEventError struct {
 	LogEventErrorInterface
+	// err records the error involved in the event.
 	err error
 }
 
-func NewLogEventError(err error) *LogEventError {
-	return &LogEventError{err: err}
+// NewLogEventError instantiates a new log event for error.
+func NewLogEventError(err error) LogEventError {
+	return LogEventError{err: err}
 }
 
-func (l *LogEventError) Error() error {
+// Error returns the error involved in the event.
+func (l LogEventError) Error() error {
 	return l.err
 }
 
-type LogEventErrorValueTypeMismatch struct {
+type LogEventTransit struct {
 	LogEventInterface
+	LogEventTransitInterface
+	// transit represents the one that triggered the event. nil is not recommended.
+	transit *Transit
+}
+
+func (l LogEventTransit) Transit() *Transit {
+	return l.transit
+}
+
+func (l LogEventTransit) Level() LogLevel {
+	return LevelDebug
+}
+
+func (l LogEventTransit) Name() string {
+	if l.transit == nil {
+		return "<nil>"
+	}
+	return l.transit.name
+}
+
+// LogEventTransitReportedError represents an error reported by transit.
+type LogEventTransitReportedError struct {
 	LogEventError
+	LogEventTransit
+}
+
+func (l LogEventTransitReportedError) Message() string {
+	return l.LogEventError.err.Error()
+}
+
+func (l LogEventTransitReportedError) Level() LogLevel {
+	return LevelWarning
+}
+
+// LogEventErrorValueTypeMismatch represents a value type mismatch error event.
+type LogEventErrorValueTypeMismatch struct {
+	LogEventTransitReportedError
 	err ErrValueTypeMismatch
 }
 
-func (l *LogEventErrorValueTypeMismatch) Message() string {
+func (l LogEventErrorValueTypeMismatch) Message() string {
 	return l.err.Error()
 }
 
-func (l *LogEventErrorValueTypeMismatch) Level() LogLevel {
+func (l LogEventErrorValueTypeMismatch) Level() LogLevel {
 	return LevelError
 }
 
-func (l *LogEventErrorValueTypeMismatch) Name() string {
-	return "final chn"
-}
-
-type LogEventTransitReportedError struct {
-	LogEventInterface
-	LogEventTransitInterface
-	LogEventError
-	transit *Transit
-}
-
-func NewLogEventTransitReportedError(transit *Transit, err error) *LogEventTransitReportedError {
-	return &LogEventTransitReportedError{transit: transit, LogEventError: *NewLogEventError(err)}
-}
-
-func (l *LogEventTransitReportedError) Message() string {
-	return l.err.Error()
-}
-
-func (l *LogEventTransitReportedError) Level() LogLevel {
-	return LevelWarning
-}
-
-func (l *LogEventTransitReportedError) Transit() *Transit {
-	return l.transit
-}
-
-func (l *LogEventTransitReportedError) Name() string {
-	if l.transit == nil {
-		return "<nil>"
-	}
-	return l.transit.name
-}
-
+// LogEventTransitStart indicates that the transit starts execution.
 type LogEventTransitStart struct {
-	LogEventInterface
-	LogEventTransitInterface
-	transit *Transit
+	LogEventTransit
 }
 
-func (l *LogEventTransitStart) Message() string {
+func (l LogEventTransitStart) Message() string {
 	return "starting..."
 }
 
-func (l *LogEventTransitStart) Transit() *Transit {
-	return l.transit
-}
-
-func (l *LogEventTransitStart) Level() LogLevel {
-	return LevelDebug
-}
-
-func (l *LogEventTransitStart) Name() string {
-	if l.transit == nil {
-		return "<nil>"
-	}
-	return l.transit.name
-}
-
+// LogEventTransitEnd indicates the end of transit execution.
 type LogEventTransitEnd struct {
-	LogEventInterface
-	LogEventTransitInterface
-	transit *Transit
+	LogEventTransit
 }
 
-func (l *LogEventTransitEnd) Message() string {
+func (l LogEventTransitEnd) Message() string {
 	return "ended."
 }
 
-func (l *LogEventTransitEnd) Transit() *Transit {
-	return l.transit
-}
-
-func (l *LogEventTransitEnd) Level() LogLevel {
-	return LevelDebug
-}
-
-func (l *LogEventTransitEnd) Name() string {
-	if l.transit == nil {
-		return "<nil>"
-	}
-	return l.transit.name
-}
-
+// LogEventTransitCanceled indicates that transit received a cancellation signal.
 type LogEventTransitCanceled struct {
-	LogEventInterface
-	LogEventTransitInterface
-	LogEventError
-	transit *Transit
+	LogEventTransitReportedError
 }
 
-func (l *LogEventTransitCanceled) Message() string {
+func (l LogEventTransitCanceled) Message() string {
 	return "cancellation notified."
 }
 
-func (l *LogEventTransitCanceled) Transit() *Transit {
-	return l.transit
-}
-
-func (l *LogEventTransitCanceled) Level() LogLevel {
-	return LevelWarning
-}
-
-func (l *LogEventTransitCanceled) Name() string {
-	if l.transit == nil {
-		return "<nil>"
-	}
-	return l.transit.name
-}
-
+// LogEventTransitWorkerPanicked indicates that panic() was triggered during the execution of the transit worker.
 type LogEventTransitWorkerPanicked struct {
-	LogEventInterface
-	LogEventTransitInterface
-	LogEventError
-	transit *Transit
-	err     ErrWorkerPanicked
+	LogEventTransitReportedError
+	err ErrWorkerPanicked
 }
 
-func (l *LogEventTransitWorkerPanicked) Message() string {
+func (l LogEventTransitWorkerPanicked) Message() string {
 	return "worker panicked."
 }
 
-func (l *LogEventTransitWorkerPanicked) Transit() *Transit {
-	return l.transit
-}
-
-func (l *LogEventTransitWorkerPanicked) Level() LogLevel {
+func (l LogEventTransitWorkerPanicked) Level() LogLevel {
 	return LevelError
-}
-func (l *LogEventTransitWorkerPanicked) Name() string {
-	if l.transit == nil {
-		return "<nil>"
-	}
-	return l.transit.name
 }
 
 // LoggerInterface defines the logging method and the parameters required by the logger.
@@ -259,12 +216,24 @@ func (l *Logger) Log(ctx context.Context, events ...LogEventInterface) {
 // It is also a logger, so it also needs to implement all methods specified by the LoggerInterface.
 type ErrorCollectorInterface interface {
 	LoggerInterface
+	// Listen starts listening goroutine.
+	// ctx is the context of receiving "done signal".
 	Listen(ctx context.Context)
+
+	// Get returns all the log events of error reported by worker.
 	Get() []LogEventErrorInterface
 
+	// append receives the log event of error.
 	append(event *LogEventErrorInterface)
 }
 
+// ErrorCollector is an error collector that collects errors in each worker report during the workflow execution,
+// including panic().
+// Due to a single execution of the workflow, the execution of the entire workflow is terminated when an error is
+// reported. That is, if you only listen to the workflow execution once, you will only receive at most one error.
+// But listening can continue, so you can keep listening for errors received when calling Execute() multiple times,
+// you can also pass the same error collector to different workflows.
+// For example, in a workflow that contains nested workflows, the same error collector can be passed in.
 type ErrorCollector struct {
 	ErrorCollectorInterface
 	mu       sync.RWMutex
@@ -272,6 +241,7 @@ type ErrorCollector struct {
 	listener chan LogEventErrorInterface
 }
 
+// NewErrorCollector instantiates a new error collector.
 func NewErrorCollector() *ErrorCollector {
 	return &ErrorCollector{
 		errors:   make([]LogEventErrorInterface, 0),
@@ -279,6 +249,9 @@ func NewErrorCollector() *ErrorCollector {
 	}
 }
 
+// Listen starts a listening goroutine.
+// ctx is the context of receiving "done signal".
+// Since this method is an infinite loop, you need to call it asynchronously.
 func (l *ErrorCollector) Listen(ctx context.Context) {
 	var e LogEventErrorInterface
 	for {
@@ -292,18 +265,21 @@ func (l *ErrorCollector) Listen(ctx context.Context) {
 	}
 }
 
+// Get returns all the log events of error reported by worker.
 func (l *ErrorCollector) Get() []LogEventErrorInterface {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 	return l.errors
 }
 
+// append receives the log event of error.
 func (l *ErrorCollector) append(event *LogEventErrorInterface) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.errors = append(l.errors, *event)
 }
 
+// Log an event.
 func (l *ErrorCollector) Log(ctx context.Context, events ...LogEventInterface) {
 	for _, event := range events {
 		if e, ok := event.(LogEventErrorInterface); ok && event != nil {

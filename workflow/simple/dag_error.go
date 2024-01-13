@@ -20,7 +20,7 @@ type ErrChannelNotExist struct {
 	error
 }
 
-func (e *ErrChannelNotExist) Error() string {
+func (e ErrChannelNotExist) Error() string {
 	return fmt.Sprintf("channel[%s] not exist", e.name)
 }
 
@@ -36,7 +36,7 @@ type ErrWorkerPanicked struct {
 	error
 }
 
-func (e *ErrWorkerPanicked) Error() string {
+func (e ErrWorkerPanicked) Error() string {
 	return fmt.Sprintf("worker panicked.")
 }
 
@@ -46,7 +46,7 @@ type ErrChannelNameExisted struct {
 	error
 }
 
-func (e *ErrChannelNameExisted) Error() string {
+func (e ErrChannelNameExisted) Error() string {
 	return fmt.Sprintf("the channel[%s] has existed.", e.name)
 }
 

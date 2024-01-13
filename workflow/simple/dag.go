@@ -173,7 +173,7 @@ func (d *Channels) get(name string) (chan any, error) {
 		return nil, ErrChannelNotInitialized
 	}
 	if _, existed := d.channels[name]; !existed {
-		return nil, &ErrChannelNotExist{name: name}
+		return nil, ErrChannelNotExist{name: name}
 	}
 	return d.channels[name], nil
 }
@@ -189,7 +189,7 @@ func (d *Channels) add(names ...string) error {
 	for _, v := range names {
 		v := v
 		if d.exists(v) {
-			return &ErrChannelNameExisted{name: v}
+			return ErrChannelNameExisted{name: v}
 		}
 	}
 	// Can only be added after all checks are passed.
@@ -416,12 +416,12 @@ func (d *DAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 	for _, t := range d.transits.transits {
 		for _, name := range t.channelInputs {
 			if _, existed := d.channels.channels[name]; !existed {
-				return &ErrChannelNotExist{name: name}
+				return ErrChannelNotExist{name: name}
 			}
 		}
 		for _, name := range t.channelOutputs {
 			if _, existed := d.channels.channels[name]; !existed {
-				return &ErrChannelNotExist{name: name}
+				return ErrChannelNotExist{name: name}
 			}
 		}
 	}
@@ -434,7 +434,9 @@ func (d *DAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 			results := d.BuildWorkflowOutput(ctx, t.channelInputs...)
 			select {
 			case <-ctx.Done(): // If the cancellation notification has been received, it will exit directly.
-				d.Log(ctx, &LogEventTransitCanceled{transit: t})
+				d.Log(ctx, LogEventTransitCanceled{
+					LogEventTransitReportedError: LogEventTransitReportedError{
+						LogEventTransit: LogEventTransit{transit: t}}})
 				return
 			default:
 				//log.Println("build workflow:", t.channelInputs, " selected.")
@@ -445,20 +447,25 @@ func (d *DAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 			var work = func(t *Transit) (any, error) {
 				return t.worker(workerCtx, *results...)
 			}
-			d.Log(ctx, &LogEventTransitStart{transit: t})
+			d.Log(ctx, LogEventTransitStart{LogEventTransit: LogEventTransit{transit: t}})
 			var result, err = func(t *Transit) (any, error) {
 				defer func() {
 					if err := recover(); err != nil {
 						e := ErrWorkerPanicked{panic: err}
-						d.Log(ctx, &LogEventTransitWorkerPanicked{transit: t, err: e})
+						d.Log(ctx, LogEventTransitWorkerPanicked{
+							LogEventTransitReportedError: LogEventTransitReportedError{
+								LogEventTransit: LogEventTransit{transit: t},
+								LogEventError:   LogEventError{err: e}}})
 						d.context.Cancel(&e)
 					}
 				}()
 				return work(t)
 			}(t)
-			d.Log(ctx, &LogEventTransitEnd{transit: t})
+			d.Log(ctx, LogEventTransitEnd{LogEventTransit: LogEventTransit{transit: t}})
 			if err != nil {
-				d.Log(ctx, NewLogEventTransitReportedError(t, err))
+				d.Log(ctx, LogEventTransitReportedError{
+					LogEventTransit: LogEventTransit{transit: t},
+					LogEventError:   NewLogEventError(err)})
 				d.context.Cancel(err)
 				return
 			}
@@ -475,10 +482,6 @@ func (d *DAG[TInput, TOutput]) CloseWorkflow() {
 	defer d.muChannels.Unlock()
 	d.channels = nil
 }
-
-const (
-	DAGContextLogger = "logger"
-)
 
 // Execute the workflow.
 //
@@ -519,7 +522,7 @@ func (d *DAG[TInput, TOutput]) Execute(root context.Context, input *TInput) *TOu
 		} else {
 			var a = new(TOutput)
 			var e = ErrValueTypeMismatch{actual: (*r)[0], expect: *a}
-			d.Log(ctx, &LogEventErrorValueTypeMismatch{err: e})
+			d.Log(ctx, LogEventErrorValueTypeMismatch{err: e})
 			results = nil
 		}
 	}(ctx)

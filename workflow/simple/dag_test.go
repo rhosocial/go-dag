@@ -834,7 +834,7 @@ func TestListenErrorReported(t *testing.T) {
 			WithDefaultChannels[int, int](),
 			WithChannels[int, int]("t11"),
 			WithTransits[int, int](transits...),
-			WithLoggers[int, int](logger))
+			WithLoggers[int, int](logger, errorCollector))
 		input := 1
 		output := f1.Execute(ctx, &input)
 		if output == nil {
@@ -879,7 +879,13 @@ func TestListenErrorReported(t *testing.T) {
 		}()
 		<-ch1
 		time.Sleep(time.Millisecond)
+
+		errors1 := errorCollector.Get()
+		assert.Len(t, errors1, 2)
+		assert.IsType(t, LogEventTransitCanceled{}, errors1[0])
+		assert.IsType(t, LogEventTransitCanceled{}, errors1[1])
+		assert.Equal(t, "i:output", errors1[0].(LogEventTransitCanceled).transit.name)
+		assert.Equal(t, "output", errors1[1].(LogEventTransitCanceled).transit.name)
 	})
-	assert.Len(t, errorCollector.Get(), 1)
 	log.Println("finished")
 }
