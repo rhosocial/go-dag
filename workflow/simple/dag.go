@@ -170,12 +170,12 @@ func (d *Channels) exists(name string) bool {
 // and the specified channel exists, otherwise an error will be reported.
 func (d *Channels) get(name string) (chan any, error) {
 	if d == nil {
-		return nil, ErrChannelNotInitialized
+		return nil, ErrChannelNotInitialized{}
 	}
 	// d.muChannels.RLock()
 	//defer d.muChannels.RUnlock()
 	if d.channels == nil {
-		return nil, ErrChannelNotInitialized
+		return nil, ErrChannelNotInitialized{}
 	}
 	if _, existed := d.channels[name]; !existed {
 		return nil, ErrChannelNotExist{name: name}
@@ -187,7 +187,7 @@ func (d *Channels) get(name string) (chan any, error) {
 // Note that the channel name to be added cannot already exist. Otherwise, `ErrChannelNameExisted` will be returned.
 func (d *Channels) add(names ...string) error {
 	if d == nil {
-		return ErrChannelNotInitialized
+		return ErrChannelNotInitialized{}
 	}
 	d.muChannels.Lock()
 	defer d.muChannels.Unlock()
@@ -389,9 +389,9 @@ func (d *DAG[TInput, TOutput]) BuildWorkflowOutput(ctx context.Context, outputs 
 //
 // - ErrChannelNotInitialized if channels is nil
 //
-// - ErrChannelInputEmpty if channelInput is empty
+// - ErrChannelInputNotSpecified if channelInput is empty
 //
-// - ErrChannelOutputEmpty if channelOutput is empty
+// - ErrChannelOutputNotSpecified if channelOutput is empty
 //
 // If the transits is empty, do nothing and return nil directly.
 // Otherwise, it is determined whether the input and output channel names mentioned in each transit are defined
@@ -408,19 +408,19 @@ func (d *DAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 	d.muChannels.RLock()
 	defer d.muChannels.RUnlock()
 	if d.channels == nil || d.channels.channels == nil {
-		return ErrChannelNotInitialized
+		return ErrChannelNotInitialized{}
 	}
 
 	d.channels.muChannels.RLock()
 	defer d.channels.muChannels.RUnlock()
 	// Checks the channel Input
 	if len(d.channels.channelInput) == 0 {
-		return ErrChannelInputEmpty
+		return ErrChannelInputNotSpecified{}
 	}
 
 	// Checks the channel Output
 	if len(d.channels.channelOutput) == 0 {
-		return ErrChannelOutputEmpty
+		return ErrChannelOutputNotSpecified{}
 	}
 
 	d.transits.muTransits.RLock()

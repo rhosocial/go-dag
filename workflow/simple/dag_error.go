@@ -5,57 +5,94 @@
 package simple
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 	"strings"
 )
 
-// ErrChannelNotInitialized reports when the channel list is not initialized.
-var ErrChannelNotInitialized = errors.New("the channel map is not initialized")
+// ErrChannelInterface indicates errors reported by the check channel.
+type ErrChannelInterface interface {
+	error
+}
+
+// ErrChannelNotInitialized indicates that the channel map is not instantiated.
+type ErrChannelNotInitialized struct {
+	ErrChannelInterface
+}
+
+func (e ErrChannelNotInitialized) Error() string {
+	return "channel map not initialized"
+}
 
 // ErrChannelNotExist indicates that the specified channel does not exist.
 type ErrChannelNotExist struct {
+	ErrChannelInterface
 	name string
-	error
 }
 
 func (e ErrChannelNotExist) Error() string {
 	return fmt.Sprintf("channel[%s] not exist", e.name)
 }
 
-// ErrChannelInputEmpty indicates that the input channel is empty.
-var ErrChannelInputEmpty = errors.New("the input channel is empty")
-
-// ErrChannelOutputEmpty indicates that the output channel is empty.
-var ErrChannelOutputEmpty = errors.New("the output channel is empty")
-
-// ErrWorkerPanicked reports when the worker is panicked.
-type ErrWorkerPanicked struct {
-	panic any
-	error
+// ErrChannelInputNotSpecified indicates that the input channel is not specified.
+type ErrChannelInputNotSpecified struct {
+	ErrChannelInterface
 }
 
-func (e ErrWorkerPanicked) Error() string {
-	return fmt.Sprintf("worker panicked.")
+func (e ErrChannelInputNotSpecified) Error() string {
+	return "channel input not specified"
+}
+
+// ErrChannelOutputNotSpecified indicates that the output channel is not specified.
+type ErrChannelOutputNotSpecified struct {
+	ErrChannelInterface
+}
+
+func (e ErrChannelOutputNotSpecified) Error() string {
+	return "channel output not specified"
 }
 
 // ErrChannelNameExisted indicates that the specified channel has existed.
 type ErrChannelNameExisted struct {
+	ErrChannelInterface
 	name string
-	error
 }
 
 func (e ErrChannelNameExisted) Error() string {
 	return fmt.Sprintf("the channel[%s] has existed.", e.name)
 }
 
+// ErrRedundantChannels indicates that there are unused channelInputs.
+type ErrRedundantChannels struct {
+	ErrChannelInterface
+	channels []string
+}
+
+func (e ErrRedundantChannels) Error() string {
+	return fmt.Sprintf("Redundant channelInputs: %v", strings.Join(e.channels, ", "))
+}
+
+// ErrTransitInterface represents the error reported by transit.
+type ErrTransitInterface interface {
+	error
+}
+
+// ErrWorkerPanicked reports when the worker is panicked.
+type ErrWorkerPanicked struct {
+	ErrTransitInterface
+	panic any
+}
+
+func (e ErrWorkerPanicked) Error() string {
+	return fmt.Sprintf("worker panicked.")
+}
+
 // ErrValueTypeMismatch defines that the data type output by the node is inconsistent with expectation.
 type ErrValueTypeMismatch struct {
+	ErrTransitInterface
 	expect any
 	actual any
 	input  string
-	error
 }
 
 func (e ErrValueTypeMismatch) Error() string {
@@ -69,22 +106,13 @@ func NewErrValueTypeMismatch(expect, actual any, input string) ErrValueTypeMisma
 	return ErrValueTypeMismatch{expect: expect, actual: actual, input: input}
 }
 
-// ErrRedundantChannels indicates that there are unused channelInputs.
-type ErrRedundantChannels struct {
-	channels []string
-	error
-}
-
-func (e ErrRedundantChannels) Error() string {
-	return fmt.Sprintf("Redundant channelInputs: %v", strings.Join(e.channels, ", "))
-}
-
 // ErrTransitChannelNonExist indicates that the channel(s) to be used by the specified node does not exist.
 type ErrTransitChannelNonExist struct {
+	ErrChannelInterface
+	ErrTransitInterface
 	transitName    string
 	channelInputs  []string
 	channelOutputs []string
-	error
 }
 
 func (e ErrTransitChannelNonExist) Error() string {
