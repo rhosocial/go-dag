@@ -1,16 +1,18 @@
 # go-dag
 
-Parallel tasks execution graph developed using Go.
+A framework developed in Go that manages the execution of workflows described by directed acyclic graphs.
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/rhosocial/go-dag.svg)](https://pkg.go.dev/github.com/rhosocial/go-dag)
 
 ## Introduction
 
-GO-DAG is a package developed in Go language that is used to compile task execution graphs and manage the execution process as efficiently as possible according to the execution graph.
+GO-DAG is a framework developed using the Go language.
+It is used to organize a series of subtasks into a directed acyclic graph in the order of their dependencies
+and manage its execution process.
 
-The so-called "execution graph" refers to a directed acyclic graph that specifies the execution dependencies of a series of tasks.
+Currently, the released versions include:
 
-After the execution graph is drawn up, GO-DAG will maximize the parallel execution of each task according to the dependencies and sequence of each task.
+- [workflow/simple](workflow/simple)
 
 ## Reference
 

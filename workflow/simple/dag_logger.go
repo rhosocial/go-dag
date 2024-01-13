@@ -7,6 +7,7 @@ package simple
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 )
@@ -92,6 +93,20 @@ func (l LogEventTransitError) Level() LogLevel {
 	return LevelWarning
 }
 
+type LogEventWorkflow struct {
+	LogEventInterface
+}
+
+func (l LogEventWorkflow) Name() string { return "<workflow>" }
+
+type LogEventWorkflowError struct {
+	LogEventError
+	LogEventWorkflow
+}
+
+func (l LogEventWorkflowError) Message() string { return l.LogEventError.err.Error() }
+func (l LogEventWorkflowError) Level() LogLevel { return LevelError }
+
 // LogEventErrorValueTypeMismatch represents a value type mismatch error event.
 type LogEventErrorValueTypeMismatch struct {
 	LogEventTransitError
@@ -107,10 +122,8 @@ func (l LogEventErrorValueTypeMismatch) Level() LogLevel {
 
 // LogEventWorkflowStart indicates that the workflow starts execution.
 type LogEventWorkflowStart struct {
-	LogEventInterface
+	LogEventWorkflow
 }
-
-func (l LogEventWorkflowStart) Name() string { return "<workflow>" }
 
 func (l LogEventWorkflowStart) Message() string { return "is starting..." }
 
@@ -118,10 +131,8 @@ func (l LogEventWorkflowStart) Level() LogLevel { return LevelDebug }
 
 // LogEventWorkflowEnd indicates the end of workflow execution.
 type LogEventWorkflowEnd struct {
-	LogEventInterface
+	LogEventWorkflow
 }
-
-func (l LogEventWorkflowEnd) Name() string { return "<workflow>" }
 
 func (l LogEventWorkflowEnd) Message() string { return "ended." }
 
@@ -215,12 +226,15 @@ func (l *Logger) logEvent(ctx context.Context, event LogEventInterface) {
 		return
 	}
 	color := green
+	std := os.Stdout
 	if event.Level() == LevelWarning {
 		color = yellow
+		std = os.Stderr
 	} else if event.Level() == LevelError {
 		color = red
+		std = os.Stderr
 	}
-	fmt.Printf("[GO-DAG] %v |%s %10s %s| %s\n", time.Now().Format(l.params.TimestampFormat), color, event.Name(), reset, event.Message())
+	fmt.Fprintf(std, "[GO-DAG] %v |%s %10s %s| %s\n", time.Now().Format(l.params.TimestampFormat), color, event.Name(), reset, event.Message())
 }
 
 func (l *Logger) Log(ctx context.Context, events ...LogEventInterface) {

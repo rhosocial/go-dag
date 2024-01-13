@@ -908,9 +908,7 @@ func TestWorkerReportValueTypeMismatch(t *testing.T) {
 		channelOutputs2 := []string{"output"}
 		transits := []*Transit{
 			NewTransit("i:input", WithInputs(channelInputs1...), WithOutputs(channelOutputs1...), WithWorker(func(ctx context.Context, a ...any) (any, error) {
-				return nil, ErrValueTypeMismatch{
-					actual: 1, expect: 1.0,
-				}
+				return nil, NewErrValueTypeMismatch(1, 1.0, channelInputs1[0])
 			})),
 			NewTransit("i:output", WithInputs(channelOutputs1...), WithOutputs(channelOutputs2...), WithWorker(worker1)),
 		}

@@ -529,6 +529,7 @@ func (d *DAG[TInput, TOutput]) Execute(root context.Context, input *TInput) *TOu
 	d.Log(ctx, LogEventWorkflowStart{})
 	err := d.BuildWorkflow(ctx)
 	if err != nil {
+		d.Log(ctx, LogEventWorkflowError{LogEventError: LogEventError{err: err}})
 		return nil
 	}
 	var results *TOutput
@@ -547,7 +548,7 @@ func (d *DAG[TInput, TOutput]) Execute(root context.Context, input *TInput) *TOu
 			results = &ra
 		} else {
 			var a = new(TOutput)
-			var e = ErrValueTypeMismatch{actual: (*r)[0], expect: *a}
+			var e = ErrValueTypeMismatch{actual: (*r)[0], expect: *a, input: d.channels.channelOutput}
 			d.Log(ctx, LogEventErrorValueTypeMismatch{
 				LogEventTransitError: LogEventTransitError{
 					LogEventError: LogEventError{err: e}}})

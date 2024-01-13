@@ -54,17 +54,19 @@ func (e ErrChannelNameExisted) Error() string {
 type ErrValueTypeMismatch struct {
 	expect any
 	actual any
+	input  string
 	error
 }
 
 func (e ErrValueTypeMismatch) Error() string {
-	return fmt.Sprintf("The type of the value [%s] is inconsistent with expectation [%s].",
-		reflect.TypeOf(e.actual), reflect.TypeOf(e.expect))
+	return fmt.Sprintf("Expectation[%s] does not match actual[%s] received on channel[%s].",
+		reflect.TypeOf(e.expect), reflect.TypeOf(e.actual), e.input)
 }
 
-// NewErrValueTypeMismatch instantiates an error to indicate that the received data type does not match the actual one.
-func NewErrValueTypeMismatch(expect, actual any) ErrValueTypeMismatch {
-	return ErrValueTypeMismatch{expect: expect, actual: actual}
+// NewErrValueTypeMismatch instantiates an error to indicate that the type of received data on in input channel
+// does not match the actual.
+func NewErrValueTypeMismatch(expect, actual any, input string) ErrValueTypeMismatch {
+	return ErrValueTypeMismatch{expect: expect, actual: actual, input: input}
 }
 
 // ErrRedundantChannels indicates that there are unused channelInputs.
