@@ -53,11 +53,6 @@ type LogEventError struct {
 	err error
 }
 
-// NewLogEventError instantiates a new log event for error.
-func NewLogEventError(err error) LogEventError {
-	return LogEventError{err: err}
-}
-
 // Error returns the error involved in the event.
 func (l LogEventError) Error() error {
 	return l.err
@@ -100,7 +95,6 @@ func (l LogEventTransitError) Level() LogLevel {
 // LogEventErrorValueTypeMismatch represents a value type mismatch error event.
 type LogEventErrorValueTypeMismatch struct {
 	LogEventTransitError
-	err ErrValueTypeMismatch
 }
 
 func (l LogEventErrorValueTypeMismatch) Message() string {

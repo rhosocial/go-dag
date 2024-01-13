@@ -62,6 +62,11 @@ func (e ErrValueTypeMismatch) Error() string {
 		reflect.TypeOf(e.actual), reflect.TypeOf(e.expect))
 }
 
+// NewErrValueTypeMismatch instantiates an error to indicate that the received data type does not match the actual one.
+func NewErrValueTypeMismatch(expect, actual any) ErrValueTypeMismatch {
+	return ErrValueTypeMismatch{expect: expect, actual: actual}
+}
+
 // ErrRedundantChannels indicates that there are unused channelInputs.
 type ErrRedundantChannels struct {
 	channels []string

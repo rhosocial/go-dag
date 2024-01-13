@@ -11,6 +11,7 @@ package simple
 
 import (
 	"context"
+	"errors"
 	"sync"
 )
 
@@ -477,10 +478,18 @@ func (d *DAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 				return work(t)
 			}(t)
 			d.Log(ctx, LogEventTransitEnd{LogEventTransit: LogEventTransit{transit: t}})
-			if err != nil {
+			if errors.As(err, &ErrValueTypeMismatch{}) {
+				d.Log(ctx, LogEventErrorValueTypeMismatch{
+					LogEventTransitError: LogEventTransitError{
+						LogEventTransit: LogEventTransit{transit: t},
+						LogEventError:   LogEventError{err: err}},
+				})
+				d.context.Cancel(err)
+				return
+			} else if err != nil {
 				d.Log(ctx, LogEventTransitError{
 					LogEventTransit: LogEventTransit{transit: t},
-					LogEventError:   NewLogEventError(err)})
+					LogEventError:   LogEventError{err: err}})
 				d.context.Cancel(err)
 				return
 			}
@@ -539,7 +548,9 @@ func (d *DAG[TInput, TOutput]) Execute(root context.Context, input *TInput) *TOu
 		} else {
 			var a = new(TOutput)
 			var e = ErrValueTypeMismatch{actual: (*r)[0], expect: *a}
-			d.Log(ctx, LogEventErrorValueTypeMismatch{err: e})
+			d.Log(ctx, LogEventErrorValueTypeMismatch{
+				LogEventTransitError: LogEventTransitError{
+					LogEventError: LogEventError{err: e}}})
 			results = nil
 		}
 	}(ctx)
