@@ -63,6 +63,7 @@ func (l LogEventError) Error() error {
 	return l.err
 }
 
+// LogEventTransit represents the event reported by transit.
 type LogEventTransit struct {
 	LogEventInterface
 	LogEventTransitInterface
@@ -74,34 +75,31 @@ func (l LogEventTransit) Transit() *Transit {
 	return l.transit
 }
 
-func (l LogEventTransit) Level() LogLevel {
-	return LevelDebug
-}
-
 func (l LogEventTransit) Name() string {
 	if l.transit == nil {
 		return "<nil>"
 	}
 	return l.transit.name
 }
+func (l LogEventTransit) Level() LogLevel { return LevelDebug }
 
-// LogEventTransitReportedError represents an error reported by transit.
-type LogEventTransitReportedError struct {
+// LogEventTransitError represents an error reported by transit.
+type LogEventTransitError struct {
 	LogEventError
 	LogEventTransit
 }
 
-func (l LogEventTransitReportedError) Message() string {
+func (l LogEventTransitError) Message() string {
 	return l.LogEventError.err.Error()
 }
 
-func (l LogEventTransitReportedError) Level() LogLevel {
+func (l LogEventTransitError) Level() LogLevel {
 	return LevelWarning
 }
 
 // LogEventErrorValueTypeMismatch represents a value type mismatch error event.
 type LogEventErrorValueTypeMismatch struct {
-	LogEventTransitReportedError
+	LogEventTransitError
 	err ErrValueTypeMismatch
 }
 
@@ -112,6 +110,28 @@ func (l LogEventErrorValueTypeMismatch) Message() string {
 func (l LogEventErrorValueTypeMismatch) Level() LogLevel {
 	return LevelError
 }
+
+// LogEventWorkflowStart indicates that the workflow starts execution.
+type LogEventWorkflowStart struct {
+	LogEventInterface
+}
+
+func (l LogEventWorkflowStart) Name() string { return "<workflow>" }
+
+func (l LogEventWorkflowStart) Message() string { return "is starting..." }
+
+func (l LogEventWorkflowStart) Level() LogLevel { return LevelDebug }
+
+// LogEventWorkflowEnd indicates the end of workflow execution.
+type LogEventWorkflowEnd struct {
+	LogEventInterface
+}
+
+func (l LogEventWorkflowEnd) Name() string { return "<workflow>" }
+
+func (l LogEventWorkflowEnd) Message() string { return "ended." }
+
+func (l LogEventWorkflowEnd) Level() LogLevel { return LevelDebug }
 
 // LogEventTransitStart indicates that the transit starts execution.
 type LogEventTransitStart struct {
@@ -133,7 +153,7 @@ func (l LogEventTransitEnd) Message() string {
 
 // LogEventTransitCanceled indicates that transit received a cancellation signal.
 type LogEventTransitCanceled struct {
-	LogEventTransitReportedError
+	LogEventTransitError
 }
 
 func (l LogEventTransitCanceled) Message() string {
@@ -142,7 +162,7 @@ func (l LogEventTransitCanceled) Message() string {
 
 // LogEventTransitWorkerPanicked indicates that panic() was triggered during the execution of the transit worker.
 type LogEventTransitWorkerPanicked struct {
-	LogEventTransitReportedError
+	LogEventTransitError
 	err ErrWorkerPanicked
 }
 
@@ -158,6 +178,8 @@ func (l LogEventTransitWorkerPanicked) Level() LogLevel {
 // For specific usage, please refer to Logger.
 type LoggerInterface interface {
 	// Log an event.
+	// ctx is the context in which the current method is called.
+	// events can be one event or more.
 	Log(ctx context.Context, events ...LogEventInterface)
 
 	SetFlags(uint)
@@ -186,7 +208,8 @@ const (
 )
 
 const (
-	LDebugEnabled = 2
+	// LDebugEnabled means displaying logs with the log level debug.
+	LDebugEnabled = 0b10
 )
 
 func (l *Logger) SetFlags(flags uint) {

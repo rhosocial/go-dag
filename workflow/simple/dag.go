@@ -4,6 +4,8 @@
 
 /*
 Package simple implements a simple workflow that is executed according to a specified directed acyclic graph.
+At the same time, this package includes a simple logger and error collector to help track the execution process of
+the workflow and the errors generated.
 */
 package simple
 
@@ -124,6 +126,7 @@ type DAGInterface[TInput, TOutput any] interface {
 	Log(ctx context.Context, events ...LogEventInterface)
 }
 
+// ChannelsInterface represents the interface that the workflow should implement.
 type ChannelsInterface interface {
 	exists(name string) bool
 	get(name string) (chan any, error)
@@ -150,6 +153,7 @@ func NewDAGChannels() *Channels {
 	}
 }
 
+// exists checks if the name of channel exists.
 func (d *Channels) exists(name string) bool {
 	if d == nil || d.channels == nil {
 		return false
@@ -200,7 +204,9 @@ func (d *Channels) add(names ...string) error {
 	return nil
 }
 
+// ContextInterface represents the context interface that the workflow should implement.
 type ContextInterface interface {
+	// Cancel the workflow when executing. nil is not recommended. It is no impact when workflow is not executing.
 	Cancel(cause error)
 }
 
@@ -219,11 +225,13 @@ func (d *Context) Cancel(cause error) {
 	d.cancel(cause)
 }
 
+// Transits represents the transits for the workflow.
 type Transits struct {
 	muTransits sync.RWMutex
 	transits   []*Transit
 }
 
+// Loggers represents the loggers for the workflow.
 type Loggers struct {
 	muLoggers sync.RWMutex
 	loggers   []LoggerInterface
@@ -260,6 +268,7 @@ type DAG[TInput, TOutput any] struct {
 	DAGInterface[TInput, TOutput]
 }
 
+// Log several logs.
 func (d *DAG[TInput, TOutput]) Log(ctx context.Context, events ...LogEventInterface) {
 	if events == nil || len(events) == 0 {
 		return
@@ -376,8 +385,11 @@ func (d *DAG[TInput, TOutput]) BuildWorkflowOutput(ctx context.Context, outputs 
 // BuildWorkflow is used to build the entire workflow.
 //
 // Note that before building, the input and output channels must be prepared, otherwise an exception will be returned:
+//
 // - ErrChannelNotInitialized if channels is nil
+//
 // - ErrChannelInputEmpty if channelInput is empty
+//
 // - ErrChannelOutputEmpty if channelOutput is empty
 //
 // If the transits is empty, do nothing and return nil directly.
@@ -385,8 +397,11 @@ func (d *DAG[TInput, TOutput]) BuildWorkflowOutput(ctx context.Context, outputs 
 // in the channel. As long as one channel does not exist, an error will be reported: ErrChannelNotExist.
 //
 // After the check passes, the workflow is built according to the following rules:
+//
 // - Call BuildWorkflowOutput to wait for the result of previous transit.
+//
 // - Running the worker of transit.
+//
 // - Call BuildWorkflowInput with the result of the worker.
 func (d *DAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 	d.muChannels.RLock()
@@ -435,7 +450,7 @@ func (d *DAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 			select {
 			case <-ctx.Done(): // If the cancellation notification has been received, it will exit directly.
 				d.Log(ctx, LogEventTransitCanceled{
-					LogEventTransitReportedError: LogEventTransitReportedError{
+					LogEventTransitError: LogEventTransitError{
 						LogEventTransit: LogEventTransit{transit: t}}})
 				return
 			default:
@@ -453,7 +468,7 @@ func (d *DAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 					if err := recover(); err != nil {
 						e := ErrWorkerPanicked{panic: err}
 						d.Log(ctx, LogEventTransitWorkerPanicked{
-							LogEventTransitReportedError: LogEventTransitReportedError{
+							LogEventTransitError: LogEventTransitError{
 								LogEventTransit: LogEventTransit{transit: t},
 								LogEventError:   LogEventError{err: e}}})
 						d.context.Cancel(&e)
@@ -463,7 +478,7 @@ func (d *DAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 			}(t)
 			d.Log(ctx, LogEventTransitEnd{LogEventTransit: LogEventTransit{transit: t}})
 			if err != nil {
-				d.Log(ctx, LogEventTransitReportedError{
+				d.Log(ctx, LogEventTransitError{
 					LogEventTransit: LogEventTransit{transit: t},
 					LogEventError:   NewLogEventError(err)})
 				d.context.Cancel(err)
@@ -477,6 +492,7 @@ func (d *DAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 
 // CloseWorkflow closes the workflow after execution.
 // After this method is executed, all input, output channels and transits will be deleted.
+// Note, please do not call this method during workflow execution, otherwise it will lead to unpredictable consequences.
 func (d *DAG[TInput, TOutput]) CloseWorkflow() {
 	d.muChannels.Lock()
 	defer d.muChannels.Unlock()
@@ -501,6 +517,7 @@ func (d *DAG[TInput, TOutput]) Execute(root context.Context, input *TInput) *TOu
 	d.context = &Context{context: ctx, cancel: cancel}
 	d.muContext.Unlock()
 
+	d.Log(ctx, LogEventWorkflowStart{})
 	err := d.BuildWorkflow(ctx)
 	if err != nil {
 		return nil
@@ -528,6 +545,7 @@ func (d *DAG[TInput, TOutput]) Execute(root context.Context, input *TInput) *TOu
 	}(ctx)
 	d.BuildWorkflowInput(ctx, *input, d.channels.channelInput)
 	<-signal
+	d.Log(ctx, LogEventWorkflowEnd{})
 	return results
 }
 
