@@ -884,8 +884,9 @@ func TestListenErrorReported(t *testing.T) {
 		assert.Len(t, errors1, 2)
 		assert.IsType(t, LogEventTransitCanceled{}, errors1[0])
 		assert.IsType(t, LogEventTransitCanceled{}, errors1[1])
-		assert.Equal(t, "i:output", errors1[0].(LogEventTransitCanceled).transit.name)
-		assert.Equal(t, "output", errors1[1].(LogEventTransitCanceled).transit.name)
+		// Note that due to the asynchronous execution method, there is no guarantee that the log canceled first will be ranked first.
+		assert.Subset(t, []string{"i:output", "output"},
+			[]string{errors1[0].(LogEventTransitCanceled).transit.name, errors1[1].(LogEventTransitCanceled).transit.name})
 	})
 	log.Println("finished")
 }
