@@ -2,24 +2,25 @@
 // Use of this source code is governed by Apache-2.0 license
 // that can be found in the LICENSE file.
 
-/*
-Package simple implements a simple workflow that is executed according to a specified directed acyclic graph.
-*/
 package simple
 
 import "context"
 
+// Option defines the option used to instantiate a DAG.
 type Option[TInput, TOutput any] func(d *DAG[TInput, TOutput]) error
 
 // NewDAG instantiates a workflow.
 //
 // The new instance does not come with a logger. If you want to specify a logger, use the NewDAGWithLogger method.
-func NewDAG[TInput, TOutput any](options ...Option[TInput, TOutput]) *DAG[TInput, TOutput] {
+func NewDAG[TInput, TOutput any](options ...Option[TInput, TOutput]) (*DAG[TInput, TOutput], error) {
 	dag := &DAG[TInput, TOutput]{}
 	for _, option := range options {
-		option(dag)
+		err := option(dag)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return dag
+	return dag, nil
 }
 
 // WithChannels specifies channel names for the workflow.
@@ -32,7 +33,7 @@ func WithChannels[TInput, TOutput any](names ...string) Option[TInput, TOutput] 
 		if d.channels == nil {
 			d.channels = NewDAGChannels()
 		}
-		return d.channels.Add(names...)
+		return d.channels.add(names...)
 	}
 }
 
@@ -44,8 +45,11 @@ func WithChannels[TInput, TOutput any](names ...string) Option[TInput, TOutput] 
 // The channel with the same name will be reinitialized.
 func WithChannelInput[TInput, TOutput any](name string) Option[TInput, TOutput] {
 	return func(d *DAG[TInput, TOutput]) error {
-		if !d.channels.exists(name) {
-			return &ErrChannelNotExist{name: name}
+		//if !d.channels.exists(name) {
+		//	return &ErrChannelNotExist{name: name}
+		//}
+		if d.channels == nil {
+			d.channels = NewDAGChannels()
 		}
 		d.channels.channelInput = name
 		return nil
@@ -60,10 +64,28 @@ func WithChannelInput[TInput, TOutput any](name string) Option[TInput, TOutput] 
 // The channel with the same name will be reinitialized.
 func WithChannelOutput[TInput, TOutput any](name string) Option[TInput, TOutput] {
 	return func(d *DAG[TInput, TOutput]) error {
-		if !d.channels.exists(name) {
-			return &ErrChannelNotExist{name: name}
+		//if !d.channels.exists(name) {
+		//	return &ErrChannelNotExist{name: name}
+		//}
+		if d.channels == nil {
+			d.channels = NewDAGChannels()
 		}
 		d.channels.channelOutput = name
+		return nil
+	}
+}
+
+// WithDefaultChannels defines the input and output channel for the workflow.
+// Note that this method can be placed before or after the WithChannels(). But if it is placed before it,
+// you need to ensure that the subsequent WithChannels() does not mention "input" and "output" again.
+func WithDefaultChannels[TInput, TOutput any]() Option[TInput, TOutput] {
+	return func(d *DAG[TInput, TOutput]) error {
+		if d.channels == nil {
+			d.channels = NewDAGChannels()
+		}
+		d.channels.add("input", "output")
+		d.channels.channelInput = "input"
+		d.channels.channelOutput = "output"
 		return nil
 	}
 }
@@ -76,28 +98,36 @@ func WithTransits[TInput, TOutput any](transits ...*Transit) Option[TInput, TOut
 	return func(d *DAG[TInput, TOutput]) error {
 		lenTransits := len(transits)
 		if d.transits == nil {
-			d.transits = &Transits{workflowTransits: make([]*Transit, lenTransits)}
+			d.transits = &Transits{transits: make([]*Transit, lenTransits)}
 		}
 		if lenTransits == 0 {
 			return nil
 		}
 		for i, t := range transits {
-			d.transits.workflowTransits[i] = t
+			d.transits.transits[i] = t
 		}
 		return nil
 	}
 }
 
-// WithLogger specifies the Logger for the entire workflow.
+// WithLoggers specifies the Logger for the entire workflow.
 //
-// This method can be executed multiple times. The ones executed later will overwrite the ones executed earlier.
-func WithLogger[TInput, TOutput any](logger LoggerInterface) Option[TInput, TOutput] {
+// This method can be executed multiple times. The ones executed later will be merged with the ones executed earlier.
+func WithLoggers[TInput, TOutput any](loggers ...LoggerInterface) Option[TInput, TOutput] {
 	return func(d *DAG[TInput, TOutput]) error {
-		d.logger = logger
+		d.muLoggers.Lock()
+		defer d.muLoggers.Unlock()
+		if d.loggers == nil {
+			d.loggers = &Loggers{}
+		}
+		for _, logger := range loggers {
+			d.loggers.loggers = append(d.loggers.loggers, logger)
+		}
 		return nil
 	}
 }
 
+// TransitOption defines the option used to instantiate a Transit.
 type TransitOption func(d *Transit)
 
 // NewTransit instantiates the workflow's transit.
@@ -109,6 +139,11 @@ func NewTransit(name string, options ...TransitOption) *Transit {
 	return transit
 }
 
+// WithInputs specifies the input channels to be monitored for transit.
+// Note that the channel names passed in is consistent with the number and order of parameters
+// eventually received by the worker.
+// This method can be called multiple times,
+// but the results of subsequent calls will be merged and overwritten by previous calls.
 func WithInputs(names ...string) TransitOption {
 	return func(d *Transit) {
 		if d.channelInputs == nil {
@@ -118,6 +153,10 @@ func WithInputs(names ...string) TransitOption {
 	}
 }
 
+// WithOutputs specifies the channel names for transit to be injected into worker execution results.
+// Each channel injects the same content, so the order of channel names passed in does not matter.
+// This method can be called multiple times,
+// but the results of subsequent calls will be merged and overwritten by previous calls.
 func WithOutputs(names ...string) TransitOption {
 	return func(d *Transit) {
 		if d.channelOutputs == nil {
@@ -127,14 +166,18 @@ func WithOutputs(names ...string) TransitOption {
 	}
 }
 
+// WithWorker specifies a worker for transit.
+// This method can be called multiple times, but only the last one takes effect.
 func WithWorker(worker func(context.Context, ...any) (any, error)) TransitOption {
 	return func(d *Transit) {
 		d.worker = worker
 	}
 }
 
+// LoggerOption defines the option used to instantiate a Logger.
 type LoggerOption func(d *Logger)
 
+// NewLogger instantiates a Logger. Its return value can be used as a parameter to WithLoggers().
 func NewLogger(options ...LoggerOption) *Logger {
 	logger := &Logger{}
 	if len(options) == 0 {
@@ -148,6 +191,7 @@ func NewLogger(options ...LoggerOption) *Logger {
 	return logger
 }
 
+// WithLoggerParams defines the logger parameters.
 func WithLoggerParams(params LoggerParams) LoggerOption {
 	return func(d *Logger) {
 		d.params = params
