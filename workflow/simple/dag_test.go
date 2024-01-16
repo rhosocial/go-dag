@@ -1030,7 +1030,7 @@ func TestCancelWorkflowByCtx(t *testing.T) {
 	})
 	t.Run("cancel when running", func(t *testing.T) {
 		ch1 := make(chan struct{})
-		ctx1, _ := context.WithTimeoutCause(context.Background(), time.Millisecond*1500, errors.New("canceled by parent ctx"))
+		ctx1, _ := context.WithTimeout(context.Background(), time.Millisecond*1500)
 		go func() {
 			output := f.Execute(ctx1, &input)
 			assert.Nil(t, output)
