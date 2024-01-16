@@ -3,6 +3,7 @@
 A framework developed in Go that manages the execution of workflows described by directed acyclic graphs.
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/rhosocial/go-dag.svg)](https://pkg.go.dev/github.com/rhosocial/go-dag)
+[![Go Report Card](https://goreportcard.com/badge/github.com/rhosocial/go-dag)](https://goreportcard.com/report/github.com/rhosocial/go-dag)
 
 ## Introduction
 

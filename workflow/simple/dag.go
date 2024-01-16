@@ -452,7 +452,9 @@ func (d *DAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 			case <-ctx.Done(): // If the cancellation notification has been received, it will exit directly.
 				d.Log(ctx, LogEventTransitCanceled{
 					LogEventTransitError: LogEventTransitError{
-						LogEventTransit: LogEventTransit{transit: t}}})
+						LogEventTransit: LogEventTransit{transit: t},
+						LogEventError:   LogEventError{err: ctx.Err()},
+					}})
 				return
 			default:
 				//log.Println("build workflow:", t.channelInputs, " selected.")
