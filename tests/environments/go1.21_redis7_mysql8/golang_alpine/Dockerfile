@@ -8,7 +8,7 @@ RUN apk add --no-cache git
 
 WORKDIR /opt/project
 
-COPY go.mod go.sum main.go main_test.go ./
+COPY go.mod go.sum ./
 
 RUN go mod tidy
 RUN go build
