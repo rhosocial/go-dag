@@ -191,6 +191,8 @@ func (l LogEventChannelReady) Value() any {
 	return l.value
 }
 
+func (l LogEventChannelReady) Name() string { return l.name }
+
 func (l LogEventChannelReady) Level() LogLevel { return LevelDebug }
 
 func (l LogEventChannelReady) Message() string {
@@ -205,11 +207,9 @@ type LogEventChannelInputReady struct {
 	LogEventChannelReady
 }
 
-func (l LogEventChannelInputReady) Name() string { return "->:" + l.name }
-
 func (l LogEventChannelInputReady) Message() string {
 	if l.message == "" {
-		return "injected"
+		return "->:channel"
 	}
 	return l.message
 }
@@ -219,11 +219,9 @@ type LogEventChannelOutputReady struct {
 	LogEventChannelReady
 }
 
-func (l LogEventChannelOutputReady) Name() string { return "<-:" + l.name }
-
 func (l LogEventChannelOutputReady) Message() string {
 	if l.message == "" {
-		return "received"
+		return "<-:channel"
 	}
 	return l.message
 }
@@ -271,6 +269,7 @@ func (l *Logger) SetFlags(flags uint) {
 }
 
 func (l *Logger) logEvent(ctx context.Context, event LogEventInterface) {
+	now := time.Now().Format(l.params.TimestampFormat)
 	if !l.params.logDebugEnabled && (event.Level() == LevelDebug) {
 		return
 	}
@@ -283,7 +282,7 @@ func (l *Logger) logEvent(ctx context.Context, event LogEventInterface) {
 		color = red
 		std = os.Stderr
 	}
-	fmt.Fprintf(std, "[GO-DAG] %v |%s %10s %s| %s\n", time.Now().Format(l.params.TimestampFormat), color, event.Name(), reset, event.Message())
+	fmt.Fprintf(std, "[GO-DAG] %v |%s %10s %s| %s\n", now, color, event.Name(), reset, event.Message())
 }
 
 func (l *Logger) Log(ctx context.Context, events ...LogEventInterface) {

@@ -329,8 +329,8 @@ func (d *DAG[TInput, TOutput]) BuildWorkflowInput(ctx context.Context, result an
 		i := i
 		go func() {
 			if chs[i] != nil {
-				chs[i] <- result
 				d.Log(ctx, LogEventChannelInputReady{LogEventChannelReady{value: result, name: inputs[i]}})
+				chs[i] <- result
 			}
 		}()
 	}
