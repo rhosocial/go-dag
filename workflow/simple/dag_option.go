@@ -174,6 +174,13 @@ func WithWorker(worker func(context.Context, ...any) (any, error)) TransitOption
 	}
 }
 
+// WithAllowFailure specifies whether to continue when the worker reports an error or panicked for the transit.
+func WithAllowFailure(allow bool) TransitOption {
+	return func(d *Transit) {
+		d.allowFailure = allow
+	}
+}
+
 // LoggerOption defines the option used to instantiate a Logger.
 type LoggerOption func(d *Logger)
 

@@ -37,6 +37,9 @@ type Transit struct {
 	// have and only one receiver, otherwise it will always be blocked.
 	channelOutputs []string
 
+	// allowFailure indicates whether to continue when the worker reports an error or panicked. Default is false.
+	allowFailure bool
+
 	// worker represents the working method of this transit.
 	//
 	// The first parameter is context.Context, which is used to receive the context derived from the superior to
@@ -476,7 +479,10 @@ func (d *DAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 							LogEventTransitError: LogEventTransitError{
 								LogEventTransit: LogEventTransit{transit: t},
 								LogEventError:   LogEventError{err: e}}})
-						d.context.Cancel(&e)
+						if !t.allowFailure {
+							d.context.Cancel(&e)
+							return
+						}
 					}
 				}()
 				return work(t)
@@ -488,12 +494,12 @@ func (d *DAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 						LogEventTransit: LogEventTransit{transit: t},
 						LogEventError:   LogEventError{err: err}},
 				})
-				d.context.Cancel(err)
-				return
 			} else if err != nil {
 				d.Log(ctx, LogEventTransitError{
 					LogEventTransit: LogEventTransit{transit: t},
 					LogEventError:   LogEventError{err: err}})
+			}
+			if err != nil && !t.allowFailure {
 				d.context.Cancel(err)
 				return
 			}

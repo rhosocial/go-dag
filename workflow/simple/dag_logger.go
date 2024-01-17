@@ -168,7 +168,6 @@ func (l LogEventTransitCanceled) Message() string {
 // LogEventTransitWorkerPanicked indicates that panic() was triggered during the execution of the transit worker.
 type LogEventTransitWorkerPanicked struct {
 	LogEventTransitError
-	err ErrWorkerPanicked
 }
 
 func (l LogEventTransitWorkerPanicked) Message() string {
