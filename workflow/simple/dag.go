@@ -330,6 +330,7 @@ func (d *DAG[TInput, TOutput]) BuildWorkflowInput(ctx context.Context, result an
 		go func() {
 			if chs[i] != nil {
 				chs[i] <- result
+				d.Log(ctx, LogEventChannelInputReady{LogEventChannelReady{value: result, name: inputs[i]}})
 			}
 		}()
 	}
@@ -372,6 +373,7 @@ func (d *DAG[TInput, TOutput]) BuildWorkflowOutput(ctx context.Context, outputs 
 			for { // always check the done notification.
 				select {
 				case results[i] = <-chs[i]:
+					d.Log(ctx, LogEventChannelOutputReady{LogEventChannelReady{value: results[i], name: outputs[i]}})
 					return
 				case <-ctx.Done():
 					return // return immediately if done received and no longer wait for the channel.

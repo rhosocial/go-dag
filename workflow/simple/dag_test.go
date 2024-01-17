@@ -764,7 +764,7 @@ func TestCancelWorkflowWithNestedWorkflow(t *testing.T) {
 			WithChannels[int, int]("t11"),
 			WithTransits[int, int](transits...),
 			WithLoggers[int, int](logger))
-		input := 1
+		input := a[0].(int)
 		output := f1.Execute(ctx, &input)
 		if output == nil {
 			return nil, nil
@@ -835,7 +835,7 @@ func TestListenErrorReported(t *testing.T) {
 			WithChannels[int, int]("t11"),
 			WithTransits[int, int](transits...),
 			WithLoggers[int, int](logger, errorCollector))
-		input := 1
+		input := a[0].(int)
 		output := f1.Execute(ctx, &input)
 		if output == nil {
 			return nil, nil
@@ -1048,4 +1048,61 @@ func TestCancelWorkflowByCtx(t *testing.T) {
 			[]string{errors1[0].(LogEventTransitCanceled).transit.name, errors1[1].(LogEventTransitCanceled).transit.name})
 	})
 	log.Println("finished")
+}
+
+func TestCriticalPath(t *testing.T) {
+	var worker = func(ctx context.Context, a ...any) (any, error) {
+		time.Sleep(time.Millisecond * 10)
+		return a[0], nil
+	}
+	var transits []*Transit
+	var channels []string
+	for i := 0; i < 10; i++ {
+		channels = append(channels, fmt.Sprintf("t%03d", i))
+		transits = append(transits, NewTransit(
+			fmt.Sprintf("transit%03d", i),
+			WithInputs(fmt.Sprintf("t%03d", i)),
+			WithOutputs(fmt.Sprintf("t%03d", i+1)),
+			WithWorker(worker),
+		))
+	}
+
+	channels = append(channels, fmt.Sprintf("t%03d", 10))
+	transits = append(transits, NewTransit(
+		"transit_input",
+		WithInputs("input"),
+		WithOutputs(fmt.Sprintf("t%03d", 0)),
+		WithWorker(worker),
+	))
+	transits = append(transits, NewTransit(
+		"transit_output",
+		WithInputs(fmt.Sprintf("t%03d", 10)),
+		WithOutputs("output"),
+		WithWorker(worker),
+	))
+
+	channels = append(channels, fmt.Sprintf("ta%03d", 3), fmt.Sprintf("ta%03d", 7))
+	transits = append(transits, NewTransit(
+		fmt.Sprintf("transit_a_%03d", 3),
+		WithInputs(fmt.Sprintf("ta%03d", 3)),
+		WithOutputs(fmt.Sprintf("ta%03d", 7)),
+		WithWorker(func(ctx context.Context, a ...any) (any, error) {
+			time.Sleep(time.Millisecond * 20)
+			return a[0], nil
+		}),
+	))
+	transits[2].channelOutputs = append(transits[2].channelOutputs, fmt.Sprintf("ta%03d", 3))
+	transits[7].channelInputs = append(transits[7].channelInputs, fmt.Sprintf("ta%03d", 7))
+	logger := NewLogger()
+	logger.SetFlags(LDebugEnabled)
+	f, _ := NewDAG[int, int](
+		WithDefaultChannels[int, int](),
+		WithChannels[int, int](channels...),
+		WithTransits[int, int](transits...),
+		WithLoggers[int, int](logger),
+	)
+	input := 1
+	result := f.Execute(context.Background(), &input)
+	assert.NotNil(t, result)
+	assert.Equal(t, 1, *result)
 }

@@ -179,6 +179,55 @@ func (l LogEventTransitWorkerPanicked) Level() LogLevel {
 	return LevelError
 }
 
+// LogEventChannelReady represents the channel ready event.
+type LogEventChannelReady struct {
+	LogEventInterface
+	value   any
+	name    string
+	message string
+}
+
+func (l LogEventChannelReady) Value() any {
+	return l.value
+}
+
+func (l LogEventChannelReady) Level() LogLevel { return LevelDebug }
+
+func (l LogEventChannelReady) Message() string {
+	if l.message == "" {
+		return "ready"
+	}
+	return l.message
+}
+
+// LogEventChannelInputReady represents the input channel ready event.
+type LogEventChannelInputReady struct {
+	LogEventChannelReady
+}
+
+func (l LogEventChannelInputReady) Name() string { return "->:" + l.name }
+
+func (l LogEventChannelInputReady) Message() string {
+	if l.message == "" {
+		return "injected"
+	}
+	return l.message
+}
+
+// LogEventChannelOutputReady represents the output channel ready event.
+type LogEventChannelOutputReady struct {
+	LogEventChannelReady
+}
+
+func (l LogEventChannelOutputReady) Name() string { return "<-:" + l.name }
+
+func (l LogEventChannelOutputReady) Message() string {
+	if l.message == "" {
+		return "received"
+	}
+	return l.message
+}
+
 // LoggerInterface defines the logging method and the parameters required by the logger.
 // For specific usage, please refer to Logger.
 type LoggerInterface interface {
