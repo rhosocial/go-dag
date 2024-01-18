@@ -1129,9 +1129,9 @@ func TestTransitAllowFailure(t *testing.T) {
 		return s, fmt.Errorf("error occurred at %v", time.Since(now))
 	}
 	worker2 := func(ctx context.Context, a ...any) (any, error) {
-		channelInputs1 := []string{"input"}
-		channelOutputs1 := []string{"t11"}
-		channelOutputs2 := []string{"output"}
+		channelInputs1 := []string{"i:input"}
+		channelOutputs1 := []string{"i:t11"}
+		channelOutputs2 := []string{"i:output"}
 		transits := []*Transit{
 			NewTransit("i:input", WithInputs(channelInputs1...), WithOutputs(channelOutputs1...), WithWorker(worker1),
 				WithAllowFailure(true)),
@@ -1139,8 +1139,9 @@ func TestTransitAllowFailure(t *testing.T) {
 				WithAllowFailure(true)),
 		}
 		f1, _ := NewDAG[int, int](
-			WithDefaultChannels[int, int](),
-			WithChannels[int, int]("t11"),
+			WithChannels[int, int]("i:input", "i:output", "i:t11"),
+			WithChannelInput[int, int]("i:input"),
+			WithChannelOutput[int, int]("i:output"),
 			WithTransits[int, int](transits...),
 			WithLoggers[int, int](logger, errorCollector))
 		input := 1
