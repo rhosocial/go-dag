@@ -16,8 +16,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestSimpleDAGChannel_Exists(t *testing.T) {
-	f, _ := NewDAG[string, string](
+func TestSimpleWorkflowChannel_Exists(t *testing.T) {
+	f, _ := NewWorkflow[string, string](
 		WithLoggers[string, string](NewLogger()))
 	assert.False(t, f.channels.exists("input"))
 	assert.False(t, f.channels.exists("output"))
@@ -25,16 +25,16 @@ func TestSimpleDAGChannel_Exists(t *testing.T) {
 	//assert.True(t, f.channels.Exists("input"))
 	//assert.True(t, f.channels.Exists("output"))
 
-	f1, _ := NewDAG[string, string](
+	f1, _ := NewWorkflow[string, string](
 		WithDefaultChannels[string, string]())
 	assert.True(t, f1.channels.exists("input"))
 	assert.True(t, f1.channels.exists("output"))
 }
 
-func TestSimpleDAGValueTypeError_Error(t *testing.T) {
+func TestSimpleWorkflowValueTypeError_Error(t *testing.T) {
 	logger := NewLogger()
 	logger.SetFlags(LDebugEnabled)
-	f, _ := NewDAG[string, string](
+	f, _ := NewWorkflow[string, string](
 		WithDefaultChannels[string, string](),
 		WithChannels[string, string]("t11"),
 		WithTransits[string, string](&Transit{
@@ -58,9 +58,9 @@ func TestSimpleDAGValueTypeError_Error(t *testing.T) {
 	assert.Nil(t, f.RunOnce(context.Background(), &input))
 }
 
-// NewDAGTwoParallelTransitsWithLogger defines a workflow with logger.
-func NewDAGTwoParallelTransitsWithLogger() *DAG[string, string] {
-	f, _ := NewDAG[string, string](
+// NewWorkflowTwoParallelTransitsWithLogger defines a workflow with logger.
+func NewWorkflowTwoParallelTransitsWithLogger() *Workflow[string, string] {
+	f, _ := NewWorkflow[string, string](
 		//         t:input          t:transit1          t:output
 		//c:input ----+----> c:t11 ------------> c:t21 -----+----> c:output
 		//            |             t:transit2              ^
@@ -107,9 +107,9 @@ func NewDAGTwoParallelTransitsWithLogger() *DAG[string, string] {
 	return f
 }
 
-// NewDAGTwoParallelTransits defines a workflow.
-func NewDAGTwoParallelTransits() *DAG[string, string] {
-	f, _ := NewDAG[string, string](
+// NewWorkflowTwoParallelTransits defines a workflow.
+func NewWorkflowTwoParallelTransits() *Workflow[string, string] {
+	f, _ := NewWorkflow[string, string](
 		//         t:input          t:transit1          t:output
 		//c:input ----+----> c:t11 ------------> c:t21 -----+----> c:output
 		//            |             t:transit2              ^
@@ -155,11 +155,11 @@ func NewDAGTwoParallelTransits() *DAG[string, string] {
 	return f
 }
 
-func TestDAGTwoParallelTransits(t *testing.T) {
+func TestWorkflowTwoParallelTransits(t *testing.T) {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 	root := context.Background()
 	t.Run("run successfully", func(t *testing.T) {
-		f := NewDAGTwoParallelTransitsWithLogger()
+		f := NewWorkflowTwoParallelTransitsWithLogger()
 		var input = "test"
 		for i := 0; i < 5; i++ {
 			var results = f.Execute(root, &input)
@@ -172,7 +172,7 @@ func TestDAGTwoParallelTransits(t *testing.T) {
 
 	t.Run("closed channel and run again", func(t *testing.T) {
 		defer func() { recover() }()
-		f := NewDAGTwoParallelTransitsWithLogger()
+		f := NewWorkflowTwoParallelTransitsWithLogger()
 		var input = "test"
 		var results = f.RunOnce(root, &input)
 		assert.Equal(t, "0test1test", *results)
@@ -180,10 +180,10 @@ func TestDAGTwoParallelTransits(t *testing.T) {
 	})
 }
 
-func BenchmarkDAGTwoParallelTransits(t *testing.B) {
+func BenchmarkWorkflowTwoParallelTransits(t *testing.B) {
 	root := context.Background()
 	t.Run("run successfully", func(t *testing.B) {
-		f := NewDAGTwoParallelTransits()
+		f := NewWorkflowTwoParallelTransits()
 		var input = "test"
 		for i := 0; i < 5; i++ {
 			var results = f.Execute(root, &input)
@@ -194,7 +194,7 @@ func BenchmarkDAGTwoParallelTransits(t *testing.B) {
 	})
 }
 
-var DAGThreeParallelDelayedWorkflowTransits = []*Transit{
+var WorkflowThreeParallelDelayedWorkflowTransits = []TransitInterface{
 	NewTransit("input",
 		WithInputs("input"),
 		WithOutputs("t11", "t12", "t13"),
@@ -247,8 +247,8 @@ var DAGThreeParallelDelayedWorkflowTransits = []*Transit{
 	),
 }
 
-var DAGOneStraightPipeline = []*Transit{
-	{
+var WorkflowOneStraightPipeline = []TransitInterface{
+	&Transit{
 		name:           "input",
 		channelInputs:  []string{"input"},
 		channelOutputs: []string{"t11"},
@@ -258,7 +258,7 @@ var DAGOneStraightPipeline = []*Transit{
 			log.Println("input... finished.")
 			return a[0], nil
 		},
-	}, {
+	}, &Transit{
 		name:           "transit1",
 		channelInputs:  []string{"t11"},
 		channelOutputs: []string{"output"},
@@ -271,42 +271,42 @@ var DAGOneStraightPipeline = []*Transit{
 	},
 }
 
-func NewDAGOneStraightPipeline() *DAG[string, string] {
-	f, _ := NewDAG[string, string](
+func NewWorkflowOneStraightPipeline() *Workflow[string, string] {
+	f, _ := NewWorkflow[string, string](
 		WithDefaultChannels[string, string](),
 		WithChannels[string, string]("t11"),
 		WithLoggers[string, string](NewLogger()))
 	return f
 }
 
-func TestSimpleDAGOneStraightPipeline(t *testing.T) {
+func TestSimpleWorkflowOneStraightPipeline(t *testing.T) {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 	root := context.Background()
 	t.Run("normal case", func(t *testing.T) {
-		f := NewDAGOneStraightPipeline()
-		f.AttachWorkflowTransit(DAGOneStraightPipeline...)
+		f := NewWorkflowOneStraightPipeline()
+		f.AddTransits(WorkflowOneStraightPipeline...)
 		var input = "test"
 		var results = f.RunOnce(root, &input)
 		assert.Equal(t, "test", *results)
 	})
 	t.Run("error case", func(t *testing.T) {
-		f := NewDAGOneStraightPipeline()
-		transits := DAGOneStraightPipeline
-		transits[1].worker = func(ctx context.Context, a ...any) (any, error) {
+		f := NewWorkflowOneStraightPipeline()
+		transits := WorkflowOneStraightPipeline
+		transits[1].setWorker(func(ctx context.Context, a ...any) (any, error) {
 			log.Println("transit1...")
 			time.Sleep(time.Second)
 			return nil, errors.New("error(s) occurred")
-		}
-		f.AttachWorkflowTransit(transits...)
+		})
+		f.AddTransits(transits...)
 		var input = "test"
 		var results = f.RunOnce(root, &input)
 		assert.Nil(t, results)
 	})
 }
 
-// NewDAGThreeParallelDelayedTransits defines a workflow.
-func NewDAGThreeParallelDelayedTransits() *DAG[string, string] {
-	f, err := NewDAG[string, string](
+// NewWorkflowThreeParallelDelayedTransits defines a workflow.
+func NewWorkflowThreeParallelDelayedTransits() *Workflow[string, string] {
+	f, err := NewWorkflow[string, string](
 		WithLoggers[string, string](NewLogger()),
 		WithChannels[string, string]("input", "t11", "t12", "t13", "t21", "t22", "t23", "output"),
 		WithDefaultChannels[string, string](),
@@ -323,11 +323,11 @@ func NewDAGThreeParallelDelayedTransits() *DAG[string, string] {
 	return f
 }
 
-func NewMultipleParallelTransitNodesWorkflow(total int) *DAG[string, string] {
+func NewMultipleParallelTransitNodesWorkflow(total int) *Workflow[string, string] {
 	if total < 1 {
 		return nil
 	}
-	f, err := NewDAG[string, string](
+	f, err := NewWorkflow[string, string](
 		WithDefaultChannels[string, string]())
 	if err != nil {
 		panic(err)
@@ -336,7 +336,7 @@ func NewMultipleParallelTransitNodesWorkflow(total int) *DAG[string, string] {
 	channelOutputs := make([]string, total)
 	for i := 0; i < total; i++ {
 
-		err := f.AttachChannels(fmt.Sprintf("t%05d1", i), fmt.Sprintf("t%05d2", i))
+		err := f.AddChannels(fmt.Sprintf("t%05d1", i), fmt.Sprintf("t%05d2", i))
 		if err != nil {
 			return nil
 		}
@@ -344,7 +344,7 @@ func NewMultipleParallelTransitNodesWorkflow(total int) *DAG[string, string] {
 		channelOutputs[i] = fmt.Sprintf("t%05d1", i)
 	}
 	for i := 0; i < total; i++ {
-		f.AttachWorkflowTransit(NewTransit(
+		f.AddTransits(NewTransit(
 			fmt.Sprintf("transit%05d", i),
 			WithInputs(fmt.Sprintf("t%05d1", i)),
 			WithOutputs(fmt.Sprintf("t%05d2", i)),
@@ -353,7 +353,7 @@ func NewMultipleParallelTransitNodesWorkflow(total int) *DAG[string, string] {
 			}),
 		))
 	}
-	f.AttachWorkflowTransit(NewTransit(
+	f.AddTransits(NewTransit(
 		"input", WithInputs("input"), WithOutputs(channelOutputs...), WithWorker(func(ctx context.Context, a ...any) (any, error) {
 			return a[0], nil
 		})), NewTransit(
@@ -367,13 +367,13 @@ func NewMultipleParallelTransitNodesWorkflow(total int) *DAG[string, string] {
 	return f
 }
 
-func TestSimpleDAGContext_Cancel(t *testing.T) {
+func TestSimpleWorkflowContext_Cancel(t *testing.T) {
 	log.SetFlags(log.Lshortfile | log.LstdFlags | log.Lmicroseconds)
 	root := context.Background()
 	t.Run("normal case", func(t *testing.T) {
-		f := NewDAGThreeParallelDelayedTransits()
+		f := NewWorkflowThreeParallelDelayedTransits()
 		assert.NotNil(t, f)
-		f.AttachWorkflowTransit(DAGThreeParallelDelayedWorkflowTransits...)
+		f.AddTransits(WorkflowThreeParallelDelayedWorkflowTransits...)
 		var input = "test"
 		var results = f.RunOnce(root, &input)
 		assert.NotNil(t, results)
@@ -381,8 +381,8 @@ func TestSimpleDAGContext_Cancel(t *testing.T) {
 	})
 	// This unit test is used to find out whether there will be data race issue in the channel map when the transit node reports an error.
 	t.Run("error case", func(t *testing.T) {
-		f := NewDAGThreeParallelDelayedTransits()
-		transits := DAGThreeParallelDelayedWorkflowTransits
+		f := NewWorkflowThreeParallelDelayedTransits()
+		transits := WorkflowThreeParallelDelayedWorkflowTransits
 		transits[1] = &Transit{
 			name:           "transit1",
 			channelInputs:  []string{"t11"},
@@ -393,7 +393,7 @@ func TestSimpleDAGContext_Cancel(t *testing.T) {
 				return nil, errors.New("transit1 reports error(s)")
 			},
 		}
-		f.AttachWorkflowTransit(transits...)
+		f.AddTransits(transits...)
 		var input = "test"
 		var results = f.RunOnce(root, &input)
 		assert.Nil(t, results)
@@ -429,11 +429,11 @@ func BenchmarkMultipleParallelTransitNodesWorkflow(t *testing.B) {
 	})
 }
 
-func TestDAGThreeParallelDelayedWorkflowTransits(t *testing.T) {
+func TestWorkflowThreeParallelDelayedWorkflowTransits(t *testing.T) {
 	log.SetFlags(log.Lshortfile | log.LstdFlags | log.Lmicroseconds)
 	root := context.Background()
-	f := NewDAGThreeParallelDelayedTransits()
-	transits := DAGThreeParallelDelayedWorkflowTransits
+	f := NewWorkflowThreeParallelDelayedTransits()
+	transits := WorkflowThreeParallelDelayedWorkflowTransits
 	transits[1] = &Transit{
 		name:           "transit1",
 		channelInputs:  []string{"t11"},
@@ -444,7 +444,7 @@ func TestDAGThreeParallelDelayedWorkflowTransits(t *testing.T) {
 			return nil, errors.New("transit1 reports error(s)")
 		},
 	}
-	f.AttachWorkflowTransit(transits...)
+	f.AddTransits(transits...)
 	var input = "test"
 	var results = f.RunOnce(root, &input)
 	assert.Nil(t, results)
@@ -457,20 +457,20 @@ func TestMultiDifferentTimeConsumingTasks(t *testing.T) {
 		time.Sleep(time.Duration(a[0].(int)) * time.Second)
 		return a[0], nil
 	}
-	transits := []*Transit{
-		{
+	transits := []TransitInterface{
+		&Transit{
 			name:           "transit",
 			channelInputs:  []string{"input"},
 			channelOutputs: []string{"t11"},
 			worker:         worker,
-		}, {
+		}, &Transit{
 			name:           "transit",
 			channelInputs:  []string{"t11"},
 			channelOutputs: []string{"output"},
 			worker:         worker,
 		},
 	}
-	f, _ := NewDAG[int, int](
+	f, _ := NewWorkflow[int, int](
 		WithChannels[int, int]("input", "t11", "output"),
 		WithDefaultChannels[int, int](),
 		WithTransits[int, int](transits...),
@@ -523,7 +523,7 @@ func TestMultiDifferentTimeConsumingTasks(t *testing.T) {
 
 	// If you want to execute multiple identical workflows in a short period of time
 	// without unpredictable data transfer order, please instantiate a new workflow before each execution.
-	f1, _ := NewDAG[int, int](
+	f1, _ := NewWorkflow[int, int](
 		WithChannels[int, int]("input", "t11", "output"),
 		WithDefaultChannels[int, int](),
 		WithTransits[int, int](transits...),
@@ -572,11 +572,11 @@ func TestNestedWorkflow(t *testing.T) {
 		channelInputs1 := []string{"input"}
 		channelOutputs1 := []string{"t11"}
 		channelOutputs2 := []string{"output"}
-		transits := []*Transit{
+		transits := []TransitInterface{
 			NewTransit("i:input", WithInputs(channelInputs1...), WithOutputs(channelOutputs1...), WithWorker(worker1)),
 			NewTransit("i:output", WithInputs(channelOutputs1...), WithOutputs(channelOutputs2...), WithWorker(worker1)),
 		}
-		f1, _ := NewDAG[int, int](
+		f1, _ := NewWorkflow[int, int](
 			WithDefaultChannels[int, int](),
 			WithChannels[int, int]("t11"),
 			WithTransits[int, int](transits...),
@@ -589,7 +589,7 @@ func TestNestedWorkflow(t *testing.T) {
 	channelOutputs1 := []string{"t11"}
 	channelOutputs2 := []string{"t12"}
 	channelOutputs3 := []string{"output"}
-	transits := []*Transit{
+	transits := []TransitInterface{
 		NewTransit("input",
 			WithInputs(channelInputs1...),
 			WithOutputs(channelOutputs1...),
@@ -600,7 +600,7 @@ func TestNestedWorkflow(t *testing.T) {
 			WithWorker(worker2)),
 		NewTransit("output", WithInputs(channelOutputs2...), WithOutputs(channelOutputs3...), WithWorker(worker1)),
 	}
-	f, _ := NewDAG[int, int](
+	f, _ := NewWorkflow[int, int](
 		WithDefaultChannels[int, int](),
 		WithChannels[int, int]("t11", "t12"),
 		WithTransits[int, int](transits...),
@@ -629,7 +629,7 @@ func TestErrWorkerPanicked_Error(t *testing.T) {
 	channelOutputs1 := []string{"t11"}
 	channelOutputs2 := []string{"t12"}
 	channelOutputs3 := []string{"output"}
-	transits := []*Transit{
+	transits := []TransitInterface{
 		NewTransit("input",
 			WithInputs(channelInputs1...),
 			WithOutputs(channelOutputs1...),
@@ -640,7 +640,7 @@ func TestErrWorkerPanicked_Error(t *testing.T) {
 			WithWorker(worker2)),
 		NewTransit("output", WithInputs(channelOutputs2...), WithOutputs(channelOutputs3...), WithWorker(worker1)),
 	}
-	f, _ := NewDAG[int, int](
+	f, _ := NewWorkflow[int, int](
 		WithDefaultChannels[int, int](),
 		WithChannels[int, int]("t11", "t12"),
 		WithTransits[int, int](transits...),
@@ -650,7 +650,7 @@ func TestErrWorkerPanicked_Error(t *testing.T) {
 	assert.Nil(t, output)
 }
 
-func TestNewDAGByChainingMethodStyle(t *testing.T) {
+func TestNewWorkflowByChainingMethodStyle(t *testing.T) {
 	worker1 := func(ctx context.Context, a ...any) (any, error) {
 		log.Println("started at", time.Now())
 		time.Sleep(time.Duration(a[0].(int)) * time.Second)
@@ -666,7 +666,7 @@ func TestNewDAGByChainingMethodStyle(t *testing.T) {
 	channelOutputs1 := []string{"t11"}
 	channelOutputs2 := []string{"t12"}
 	channelOutputs3 := []string{"output"}
-	transits := []*Transit{
+	transits := []TransitInterface{
 		NewTransit("input",
 			WithInputs(channelInputs1...),
 			WithOutputs(channelOutputs1...),
@@ -679,7 +679,7 @@ func TestNewDAGByChainingMethodStyle(t *testing.T) {
 	}
 	logger := NewLogger()
 	logger.SetFlags(LDebugEnabled)
-	f, _ := NewDAG[int, int](
+	f, _ := NewWorkflow[int, int](
 		WithChannels[int, int]("input", "output", "t11", "t12"),
 		WithChannelInput[int, int]("input"),
 		WithChannelOutput[int, int]("output"),
@@ -703,7 +703,7 @@ func TestCancelWorkflow(t *testing.T) {
 	channelOutputs1 := []string{"t11"}
 	channelOutputs2 := []string{"t12"}
 	channelOutputs3 := []string{"output"}
-	transits := []*Transit{
+	transits := []TransitInterface{
 		NewTransit("input",
 			WithInputs(channelInputs1...),
 			WithOutputs(channelOutputs1...),
@@ -716,7 +716,7 @@ func TestCancelWorkflow(t *testing.T) {
 	}
 	logger := NewLogger()
 	logger.SetFlags(LDebugEnabled)
-	f, _ := NewDAG[int, int](
+	f, _ := NewWorkflow[int, int](
 		WithChannels[int, int]("input", "output", "t11", "t12"),
 		WithChannelInput[int, int]("input"),
 		WithChannelOutput[int, int]("output"),
@@ -756,11 +756,11 @@ func TestCancelWorkflowWithNestedWorkflow(t *testing.T) {
 		channelInputs1 := []string{"input"}
 		channelOutputs1 := []string{"t11"}
 		channelOutputs2 := []string{"output"}
-		transits := []*Transit{
+		transits := []TransitInterface{
 			NewTransit("i:input", WithInputs(channelInputs1...), WithOutputs(channelOutputs1...), WithWorker(worker1)),
 			NewTransit("i:output", WithInputs(channelOutputs1...), WithOutputs(channelOutputs2...), WithWorker(worker1)),
 		}
-		f1, _ := NewDAG[int, int](
+		f1, _ := NewWorkflow[int, int](
 			WithDefaultChannels[int, int](),
 			WithChannels[int, int]("t11"),
 			WithTransits[int, int](transits...),
@@ -776,7 +776,7 @@ func TestCancelWorkflowWithNestedWorkflow(t *testing.T) {
 	channelOutputs1 := []string{"t11"}
 	channelOutputs2 := []string{"t12"}
 	channelOutputs3 := []string{"output"}
-	transits := []*Transit{
+	transits := []TransitInterface{
 		NewTransit("input",
 			WithInputs(channelInputs1...),
 			WithOutputs(channelOutputs1...),
@@ -787,7 +787,7 @@ func TestCancelWorkflowWithNestedWorkflow(t *testing.T) {
 			WithWorker(worker2)),
 		NewTransit("output", WithInputs(channelOutputs2...), WithOutputs(channelOutputs3...), WithWorker(worker1)),
 	}
-	f, _ := NewDAG[int, int](
+	f, _ := NewWorkflow[int, int](
 		WithDefaultChannels[int, int](),
 		WithChannels[int, int]("t11", "t12"),
 		WithTransits[int, int](transits...),
@@ -827,11 +827,11 @@ func TestListenErrorReported(t *testing.T) {
 		channelInputs1 := []string{"input"}
 		channelOutputs1 := []string{"t11"}
 		channelOutputs2 := []string{"output"}
-		transits := []*Transit{
+		transits := []TransitInterface{
 			NewTransit("i:input", WithInputs(channelInputs1...), WithOutputs(channelOutputs1...), WithWorker(worker1)),
 			NewTransit("i:output", WithInputs(channelOutputs1...), WithOutputs(channelOutputs2...), WithWorker(worker1)),
 		}
-		f1, _ := NewDAG[int, int](
+		f1, _ := NewWorkflow[int, int](
 			WithDefaultChannels[int, int](),
 			WithChannels[int, int]("t11"),
 			WithTransits[int, int](transits...),
@@ -847,7 +847,7 @@ func TestListenErrorReported(t *testing.T) {
 	channelOutputs1 := []string{"t11"}
 	channelOutputs2 := []string{"t12"}
 	channelOutputs3 := []string{"output"}
-	transits := []*Transit{
+	transits := []TransitInterface{
 		NewTransit("input",
 			WithInputs(channelInputs1...),
 			WithOutputs(channelOutputs1...),
@@ -858,7 +858,7 @@ func TestListenErrorReported(t *testing.T) {
 			WithWorker(worker2)),
 		NewTransit("output", WithInputs(channelOutputs2...), WithOutputs(channelOutputs3...), WithWorker(worker1)),
 	}
-	f, _ := NewDAG[int, int](
+	f, _ := NewWorkflow[int, int](
 		WithDefaultChannels[int, int](),
 		WithChannels[int, int]("t11", "t12"),
 		WithTransits[int, int](transits...),
@@ -887,7 +887,7 @@ func TestListenErrorReported(t *testing.T) {
 		assert.IsType(t, LogEventTransitCanceled{}, errors1[1])
 		// Note that due to the asynchronous execution method, there is no guarantee that the log canceled first will be ranked first.
 		assert.Subset(t, []string{"i:output", "output"},
-			[]string{errors1[0].(LogEventTransitCanceled).transit.name, errors1[1].(LogEventTransitCanceled).transit.name})
+			[]string{errors1[0].(LogEventTransitCanceled).transit.Name(), errors1[1].(LogEventTransitCanceled).transit.Name()})
 	})
 	log.Println("finished")
 }
@@ -907,13 +907,13 @@ func TestWorkerReportValueTypeMismatch(t *testing.T) {
 		channelInputs1 := []string{"input"}
 		channelOutputs1 := []string{"t11"}
 		channelOutputs2 := []string{"output"}
-		transits := []*Transit{
+		transits := []TransitInterface{
 			NewTransit("i:input", WithInputs(channelInputs1...), WithOutputs(channelOutputs1...), WithWorker(func(ctx context.Context, a ...any) (any, error) {
 				return nil, NewErrValueTypeMismatch(1, 1.0, channelInputs1[0])
 			})),
 			NewTransit("i:output", WithInputs(channelOutputs1...), WithOutputs(channelOutputs2...), WithWorker(worker1)),
 		}
-		f1, _ := NewDAG[int, int](
+		f1, _ := NewWorkflow[int, int](
 			WithDefaultChannels[int, int](),
 			WithChannels[int, int]("t11"),
 			WithTransits[int, int](transits...),
@@ -929,7 +929,7 @@ func TestWorkerReportValueTypeMismatch(t *testing.T) {
 	channelOutputs1 := []string{"t11"}
 	channelOutputs2 := []string{"t12"}
 	channelOutputs3 := []string{"output"}
-	transits := []*Transit{
+	transits := []TransitInterface{
 		NewTransit("input",
 			WithInputs(channelInputs1...),
 			WithOutputs(channelOutputs1...),
@@ -940,7 +940,7 @@ func TestWorkerReportValueTypeMismatch(t *testing.T) {
 			WithWorker(worker2)),
 		NewTransit("output", WithInputs(channelOutputs2...), WithOutputs(channelOutputs3...), WithWorker(worker1)),
 	}
-	f, _ := NewDAG[int, int](
+	f, _ := NewWorkflow[int, int](
 		WithDefaultChannels[int, int](),
 		WithChannels[int, int]("t11", "t12"),
 		WithTransits[int, int](transits...),
@@ -989,11 +989,11 @@ func TestCancelWorkflowByCtx(t *testing.T) {
 		channelInputs1 := []string{"input"}
 		channelOutputs1 := []string{"t11"}
 		channelOutputs2 := []string{"output"}
-		transits := []*Transit{
+		transits := []TransitInterface{
 			NewTransit("i:input", WithInputs(channelInputs1...), WithOutputs(channelOutputs1...), WithWorker(worker1)),
 			NewTransit("i:output", WithInputs(channelOutputs1...), WithOutputs(channelOutputs2...), WithWorker(worker1)),
 		}
-		f1, _ := NewDAG[int, int](
+		f1, _ := NewWorkflow[int, int](
 			WithDefaultChannels[int, int](),
 			WithChannels[int, int]("t11"),
 			WithTransits[int, int](transits...),
@@ -1009,7 +1009,7 @@ func TestCancelWorkflowByCtx(t *testing.T) {
 	channelOutputs1 := []string{"t11"}
 	channelOutputs2 := []string{"t12"}
 	channelOutputs3 := []string{"output"}
-	transits := []*Transit{
+	transits := []TransitInterface{
 		NewTransit("input",
 			WithInputs(channelInputs1...),
 			WithOutputs(channelOutputs1...),
@@ -1020,7 +1020,7 @@ func TestCancelWorkflowByCtx(t *testing.T) {
 			WithWorker(worker2)),
 		NewTransit("output", WithInputs(channelOutputs2...), WithOutputs(channelOutputs3...), WithWorker(worker1)),
 	}
-	f, _ := NewDAG[int, int](
+	f, _ := NewWorkflow[int, int](
 		WithDefaultChannels[int, int](),
 		WithChannels[int, int]("t11", "t12"),
 		WithTransits[int, int](transits...),
@@ -1046,7 +1046,7 @@ func TestCancelWorkflowByCtx(t *testing.T) {
 		assert.IsType(t, LogEventTransitCanceled{}, errors1[1])
 		// Note that due to the asynchronous execution method, there is no guarantee that the log canceled first will be ranked first.
 		assert.Subset(t, []string{"i:output", "output"},
-			[]string{errors1[0].(LogEventTransitCanceled).transit.name, errors1[1].(LogEventTransitCanceled).transit.name})
+			[]string{errors1[0].(LogEventTransitCanceled).transit.Name(), errors1[1].(LogEventTransitCanceled).transit.Name()})
 	})
 	log.Println("finished")
 }
@@ -1056,7 +1056,7 @@ func TestCriticalPath(t *testing.T) {
 		time.Sleep(time.Millisecond * 10)
 		return a[0], nil
 	}
-	var transits []*Transit
+	var transits []TransitInterface
 	var channels []string
 	for i := 0; i < 10; i++ {
 		channels = append(channels, fmt.Sprintf("t%03d", i))
@@ -1092,11 +1092,11 @@ func TestCriticalPath(t *testing.T) {
 			return a[0], nil
 		}),
 	))
-	transits[2].channelOutputs = append(transits[2].channelOutputs, fmt.Sprintf("ta%03d", 3))
-	transits[7].channelInputs = append(transits[7].channelInputs, fmt.Sprintf("ta%03d", 7))
+	transits[2].setChannelOutputs(fmt.Sprintf("ta%03d", 3))
+	transits[7].setChannelInputs(fmt.Sprintf("ta%03d", 7))
 	logger := NewLogger()
 	logger.SetFlags(LDebugEnabled)
-	f, _ := NewDAG[int, int](
+	f, _ := NewWorkflow[int, int](
 		WithDefaultChannels[int, int](),
 		WithChannels[int, int](channels...),
 		WithTransits[int, int](transits...),
@@ -1132,13 +1132,13 @@ func TestTransitAllowFailure(t *testing.T) {
 		channelInputs1 := []string{"i:input"}
 		channelOutputs1 := []string{"i:t11"}
 		channelOutputs2 := []string{"i:output"}
-		transits := []*Transit{
+		transits := []TransitInterface{
 			NewTransit("i:input", WithInputs(channelInputs1...), WithOutputs(channelOutputs1...), WithWorker(worker1),
 				WithAllowFailure(true)),
 			NewTransit("i:output", WithInputs(channelOutputs1...), WithOutputs(channelOutputs2...), WithWorker(worker1),
 				WithAllowFailure(true)),
 		}
-		f1, _ := NewDAG[int, int](
+		f1, _ := NewWorkflow[int, int](
 			WithChannels[int, int]("i:input", "i:output", "i:t11"),
 			WithChannelInput[int, int]("i:input"),
 			WithChannelOutput[int, int]("i:output"),
@@ -1158,7 +1158,7 @@ func TestTransitAllowFailure(t *testing.T) {
 	channelOutputs1 := []string{"t11"}
 	channelOutputs2 := []string{"t12"}
 	channelOutputs3 := []string{"output"}
-	transits := []*Transit{
+	transits := []TransitInterface{
 		NewTransit("input",
 			WithInputs(channelInputs1...),
 			WithOutputs(channelOutputs1...),
@@ -1170,7 +1170,7 @@ func TestTransitAllowFailure(t *testing.T) {
 		NewTransit("output", WithInputs(channelOutputs2...), WithOutputs(channelOutputs3...), WithWorker(worker1),
 			WithAllowFailure(true)),
 	}
-	f, _ := NewDAG[int, int](
+	f, _ := NewWorkflow[int, int](
 		WithDefaultChannels[int, int](),
 		WithChannels[int, int]("t11", "t12"),
 		WithTransits[int, int](transits...),

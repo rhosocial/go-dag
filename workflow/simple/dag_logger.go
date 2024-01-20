@@ -44,7 +44,7 @@ type LogEventErrorInterface interface {
 // LogEventTransitInterface represents the log event triggered by transit.
 type LogEventTransitInterface interface {
 	// Transit returns the transit that triggered the event. nil is not recommended.
-	Transit() *Transit
+	Transit() TransitInterface
 }
 
 // LogEventError provides a unified implementation for error events.
@@ -64,10 +64,10 @@ type LogEventTransit struct {
 	LogEventInterface
 	LogEventTransitInterface
 	// transit represents the one that triggered the event. nil is not recommended.
-	transit *Transit
+	transit TransitInterface
 }
 
-func (l LogEventTransit) Transit() *Transit {
+func (l LogEventTransit) Transit() TransitInterface {
 	return l.transit
 }
 
@@ -75,7 +75,7 @@ func (l LogEventTransit) Name() string {
 	if l.transit == nil {
 		return "<nil>"
 	}
-	return l.transit.name
+	return l.transit.Name()
 }
 func (l LogEventTransit) Level() LogLevel { return LevelDebug }
 
