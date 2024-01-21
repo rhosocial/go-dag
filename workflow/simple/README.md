@@ -8,6 +8,7 @@
   - Canceled at any time during execution.
   - Shipped with any loggers.
 - Transit:
+  - TransitInterface: Allow custom transits.
   - Any inputs and outputs(except the initial input and final output).
   - The worker accepts the incoming context parameter and allows receiving `Done()` signal.
   - Any worker error will terminate the execution and notify all the loggers to record events, including `panic()` and recover from it.

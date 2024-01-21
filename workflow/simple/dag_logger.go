@@ -44,7 +44,7 @@ type LogEventErrorInterface interface {
 // LogEventTransitInterface represents the log event triggered by transit.
 type LogEventTransitInterface interface {
 	// Transit returns the transit that triggered the event. nil is not recommended.
-	Transit() *Transit
+	Transit() TransitInterface
 }
 
 // LogEventError provides a unified implementation for error events.
@@ -64,10 +64,10 @@ type LogEventTransit struct {
 	LogEventInterface
 	LogEventTransitInterface
 	// transit represents the one that triggered the event. nil is not recommended.
-	transit *Transit
+	transit TransitInterface
 }
 
-func (l LogEventTransit) Transit() *Transit {
+func (l LogEventTransit) Transit() TransitInterface {
 	return l.transit
 }
 
@@ -75,7 +75,7 @@ func (l LogEventTransit) Name() string {
 	if l.transit == nil {
 		return "<nil>"
 	}
-	return l.transit.name
+	return l.transit.Name()
 }
 func (l LogEventTransit) Level() LogLevel { return LevelDebug }
 
@@ -168,7 +168,6 @@ func (l LogEventTransitCanceled) Message() string {
 // LogEventTransitWorkerPanicked indicates that panic() was triggered during the execution of the transit worker.
 type LogEventTransitWorkerPanicked struct {
 	LogEventTransitError
-	err ErrWorkerPanicked
 }
 
 func (l LogEventTransitWorkerPanicked) Message() string {
@@ -177,6 +176,53 @@ func (l LogEventTransitWorkerPanicked) Message() string {
 
 func (l LogEventTransitWorkerPanicked) Level() LogLevel {
 	return LevelError
+}
+
+// LogEventChannelReady represents the channel ready event.
+type LogEventChannelReady struct {
+	LogEventInterface
+	value   any
+	name    string
+	message string
+}
+
+func (l LogEventChannelReady) Value() any {
+	return l.value
+}
+
+func (l LogEventChannelReady) Name() string { return l.name }
+
+func (l LogEventChannelReady) Level() LogLevel { return LevelDebug }
+
+func (l LogEventChannelReady) Message() string {
+	if l.message == "" {
+		return "ready"
+	}
+	return l.message
+}
+
+// LogEventChannelInputReady represents the input channel ready event.
+type LogEventChannelInputReady struct {
+	LogEventChannelReady
+}
+
+func (l LogEventChannelInputReady) Message() string {
+	if l.message == "" {
+		return "->:channel"
+	}
+	return l.message
+}
+
+// LogEventChannelOutputReady represents the output channel ready event.
+type LogEventChannelOutputReady struct {
+	LogEventChannelReady
+}
+
+func (l LogEventChannelOutputReady) Message() string {
+	if l.message == "" {
+		return "<-:channel"
+	}
+	return l.message
 }
 
 // LoggerInterface defines the logging method and the parameters required by the logger.
@@ -222,6 +268,7 @@ func (l *Logger) SetFlags(flags uint) {
 }
 
 func (l *Logger) logEvent(ctx context.Context, event LogEventInterface) {
+	now := time.Now().Format(l.params.TimestampFormat)
 	if !l.params.logDebugEnabled && (event.Level() == LevelDebug) {
 		return
 	}
@@ -234,7 +281,7 @@ func (l *Logger) logEvent(ctx context.Context, event LogEventInterface) {
 		color = red
 		std = os.Stderr
 	}
-	fmt.Fprintf(std, "[GO-DAG] %v |%s %10s %s| %s\n", time.Now().Format(l.params.TimestampFormat), color, event.Name(), reset, event.Message())
+	fmt.Fprintf(std, "[GO-DAG] %v |%s %10s %s| %s\n", now, color, event.Name(), reset, event.Message())
 }
 
 func (l *Logger) Log(ctx context.Context, events ...LogEventInterface) {

@@ -15,64 +15,16 @@ import (
 	"sync"
 )
 
-// Transit defines the transit node of a directed acyclic graph.
-type Transit struct {
-	// The name of the transit node.
-	//
-	// Although it is not required to be unique, it is not recommended to duplicate the name or leave it blank,
-	// and it is not recommended to use `input` or `output` because it may be a reserved name in the future.
-	name string
-
-	// channelInputs defines the input channel names required by this transit node.
-	//
-	// All channelInputs are listened to when building a workflow. Each channel is unbuffered.
-	// The transit node will only be executed when all channelInputs have passed in values.
-	// Therefore, you need to ensure that each channel must have data coming in, otherwise it will always be blocked.
-	channelInputs []string
-
-	// channelOutputs defines the output channel names required by this transit node.
-	//
-	// The results of the execution of the transit node will be sequentially sent to the designated output channel,
-	// so that the subsequent node can continue to execute. Therefore, you need to ensure that each channel must
-	// have and only one receiver, otherwise it will always be blocked.
-	channelOutputs []string
-
-	// worker represents the working method of this transit.
-	//
-	// The first parameter is context.Context, which is used to receive the context derived from the superior to
-	// the current task. All contexts within a worker can receive done notifications for this context.
-	// If your worker is time-consuming, it should be able to receive incoming done notifications from the context.
-	//
-	// The next parameter list is the parameters passed in by the channel defined by channelInputs. You need to check
-	// the type of each parameter passed in yourself.
-	//
-	// The first return value is the execution result of the current worker. If it is a complex value, it is recommended
-	// to pass a pointer. It will be sent to each channel defined by channelOutputs in order.
-	// You need to ensure the correctness of the parameter and return value types by yourself, otherwise it will panic.
-	//
-	// worker can return error, but error are not passed on to subsequent transits.
-	// If the worker returns an error other than nil, the workflow will be canceled directly.
-	//
-	// It is strongly discouraged to panic() in the worker, as this will cause the process to abort and
-	// cannot be recovered.
-	worker func(context.Context, ...any) (any, error)
-}
-
-type DAGInitInterface interface {
-	// AttachChannels attaches additional channel names. All channelInputs are unbuffered.
-	//
-	// If the channel channelInputs already exists, the channel will be recreated.
-	AttachChannels(channels ...string) error
-
-	// AttachWorkflowTransit attaches additional transit node of workflow.
-	AttachWorkflowTransit(...*Transit)
-}
-
-// DAGInterface defines a set of methods that a simple DAG should implement.
+// WorkflowInterface defines a set of methods that a simple Workflow should implement.
 //
 // TInput represents the input data type, and TOutput represents the output data type.
-type DAGInterface[TInput, TOutput any] interface {
-	DAGInitInterface
+type WorkflowInterface[TInput, TOutput any] interface {
+	// AddChannels attaches additional channel names. All channels are unbuffered.
+	AddChannels(channels ...string) error
+
+	// AddTransits attaches additional transits of workflow.
+	AddTransits(...TransitInterface)
+
 	// BuildWorkflow builds the workflow.
 	//
 	// Input and output channelInputs must be specified, otherwise error is returned.
@@ -113,11 +65,11 @@ type DAGInterface[TInput, TOutput any] interface {
 	// If this method is called before the last call is completed, the call will be blocked until
 	// the last execution ends. That is, pipelined execution is not supported.
 	// If you want to execute multiple times simultaneously without blocking,
-	// you should newly instantiate multiple DAG instances and execute them separately.
+	// you should newly instantiate multiple Workflow instances and execute them separately.
 	Execute(ctx context.Context, input *TInput) *TOutput
 
 	// RunOnce executes the workflow only once. All channelInputs are closed after execution.
-	// If you want to re-execute, you need to re-create the workflow instance. (call NewDAG)
+	// If you want to re-execute, you need to re-create the workflow instance. (call NewWorkflow)
 	RunOnce(ctx context.Context, input *TInput) *TOutput
 
 	// Cancel an executing workflow. If there are no workflows executing, there will be no impact.
@@ -147,8 +99,8 @@ type Channels struct {
 	ChannelsInterface
 }
 
-// NewDAGChannels instantiates a map of channels.
-func NewDAGChannels() *Channels {
+// NewWorkflowChannels instantiates a map of channels.
+func NewWorkflowChannels() *Channels {
 	return &Channels{
 		channels: make(map[string]chan any),
 	}
@@ -226,12 +178,6 @@ func (d *Context) Cancel(cause error) {
 	d.cancel(cause)
 }
 
-// Transits represents the transits for the workflow.
-type Transits struct {
-	muTransits sync.RWMutex
-	transits   []*Transit
-}
-
 // Loggers represents the loggers for the workflow.
 type Loggers struct {
 	muLoggers sync.RWMutex
@@ -252,12 +198,12 @@ func (d *Loggers) Log(ctx context.Context, events ...LogEventInterface) {
 	}
 }
 
-// DAG defines a generic directed acyclic graph of proposals.
+// Workflow defines a generic directed acyclic graph of proposals.
 // When you use it, you need to specify the input data type and output data type.
 //
 // Note that the input and output data types of the transit node are not mandatory,
 // you need to verify it yourself.
-type DAG[TInput, TOutput any] struct {
+type Workflow[TInput, TOutput any] struct {
 	muChannels sync.RWMutex
 	channels   *Channels
 	muContext  sync.RWMutex
@@ -266,11 +212,11 @@ type DAG[TInput, TOutput any] struct {
 	transits   *Transits
 	muLoggers  sync.RWMutex
 	loggers    *Loggers
-	DAGInterface[TInput, TOutput]
+	WorkflowInterface[TInput, TOutput]
 }
 
 // Log several logs.
-func (d *DAG[TInput, TOutput]) Log(ctx context.Context, events ...LogEventInterface) {
+func (d *Workflow[TInput, TOutput]) Log(ctx context.Context, events ...LogEventInterface) {
 	if events == nil || len(events) == 0 {
 		return
 	}
@@ -282,12 +228,12 @@ func (d *DAG[TInput, TOutput]) Log(ctx context.Context, events ...LogEventInterf
 	d.loggers.Log(ctx, events...)
 }
 
-// AttachChannels attaches the channels to the workflow.
+// AddChannels attaches the channels to the workflow.
 // The parameter `channels` is the name list of the channels to be initialized for the first time, and the order of
 // each element is irrelevant. If you don't pass any parameter, it will have no effect.
-func (d *DAG[TInput, TOutput]) AttachChannels(channels ...string) error {
+func (d *Workflow[TInput, TOutput]) AddChannels(channels ...string) error {
 	if d.channels == nil {
-		d.channels = NewDAGChannels()
+		d.channels = NewWorkflowChannels()
 	}
 	if channels == nil || len(channels) == 0 {
 		return nil
@@ -295,9 +241,9 @@ func (d *DAG[TInput, TOutput]) AttachChannels(channels ...string) error {
 	return d.channels.add(channels...)
 }
 
-// AttachWorkflowTransit attaches the transits to the workflow.
+// AddTransits attaches the transits to the workflow.
 // The parameter transits represents a list of transit definitions, and the order of each element is irrelevant.
-func (d *DAG[TInput, TOutput]) AttachWorkflowTransit(transits ...*Transit) {
+func (d *Workflow[TInput, TOutput]) AddTransits(transits ...TransitInterface) {
 	if d.transits == nil {
 		d.transits = &Transits{}
 	}
@@ -307,7 +253,7 @@ func (d *DAG[TInput, TOutput]) AttachWorkflowTransit(transits ...*Transit) {
 // BuildWorkflowInput feeds the result to each input channel in turn.
 //
 // This function does not currently need to consider the termination of the superior context notification.
-func (d *DAG[TInput, TOutput]) BuildWorkflowInput(ctx context.Context, result any, inputs ...string) {
+func (d *Workflow[TInput, TOutput]) BuildWorkflowInput(ctx context.Context, result any, inputs ...string) {
 	d.muChannels.RLock()
 	defer d.muChannels.RUnlock()
 	var chs = make([]chan any, len(inputs))
@@ -329,6 +275,7 @@ func (d *DAG[TInput, TOutput]) BuildWorkflowInput(ctx context.Context, result an
 		i := i
 		go func() {
 			if chs[i] != nil {
+				d.Log(ctx, LogEventChannelInputReady{LogEventChannelReady{value: result, name: inputs[i]}})
 				chs[i] <- result
 			}
 		}()
@@ -342,7 +289,7 @@ func (d *DAG[TInput, TOutput]) BuildWorkflowInput(ctx context.Context, result an
 // If you do not want to be blocked when calling the current method, you should use an asynchronous style.
 // If a done notification is received from the superior context.Context, all coroutines will return immediately.
 // At this point, `results[i]` that have not received data are still `nil`.
-func (d *DAG[TInput, TOutput]) BuildWorkflowOutput(ctx context.Context, outputs ...string) *[]any {
+func (d *Workflow[TInput, TOutput]) BuildWorkflowOutput(ctx context.Context, outputs ...string) *[]any {
 	var count = len(outputs)
 	var results = make([]any, count)
 	var chs = make([]chan any, count)
@@ -372,6 +319,7 @@ func (d *DAG[TInput, TOutput]) BuildWorkflowOutput(ctx context.Context, outputs 
 			for { // always check the done notification.
 				select {
 				case results[i] = <-chs[i]:
+					d.Log(ctx, LogEventChannelOutputReady{LogEventChannelReady{value: results[i], name: outputs[i]}})
 					return
 				case <-ctx.Done():
 					return // return immediately if done received and no longer wait for the channel.
@@ -404,7 +352,7 @@ func (d *DAG[TInput, TOutput]) BuildWorkflowOutput(ctx context.Context, outputs 
 // - Running the worker of transit.
 //
 // - Call BuildWorkflowInput with the result of the worker.
-func (d *DAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
+func (d *Workflow[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 	d.muChannels.RLock()
 	defer d.muChannels.RUnlock()
 	if d.channels == nil || d.channels.channels == nil {
@@ -430,12 +378,12 @@ func (d *DAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 		return nil
 	}
 	for _, t := range d.transits.transits {
-		for _, name := range t.channelInputs {
+		for _, name := range t.GetChannelInputs() {
 			if _, existed := d.channels.channels[name]; !existed {
 				return ErrChannelNotExist{name: name}
 			}
 		}
-		for _, name := range t.channelOutputs {
+		for _, name := range t.GetChannelOutputs() {
 			if _, existed := d.channels.channels[name]; !existed {
 				return ErrChannelNotExist{name: name}
 			}
@@ -443,11 +391,11 @@ func (d *DAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 	}
 
 	for _, t := range d.transits.transits {
-		go func(ctx context.Context, t *Transit) {
+		go func(ctx context.Context, t TransitInterface) {
 			// Waiting for the results of input channels to be ready.
 			// If there is a channel with no output, the current coroutine will be blocked here.
 			// If done notification is received, return immediately and no longer wait for the channel.
-			results := d.BuildWorkflowOutput(ctx, t.channelInputs...)
+			results := d.BuildWorkflowOutput(ctx, t.GetChannelInputs()...)
 			select {
 			case <-ctx.Done(): // If the cancellation notification has been received, it will exit directly.
 				d.Log(ctx, LogEventTransitCanceled{
@@ -462,11 +410,11 @@ func (d *DAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 			// The sub-Context is derived here only to prevent other Contexts from being affected when the worker stops
 			// actively.
 			workerCtx, _ := context.WithCancelCause(ctx)
-			var work = func(t *Transit) (any, error) {
-				return t.worker(workerCtx, *results...)
+			var work = func(t TransitInterface) (any, error) {
+				return t.Run(workerCtx, *results...)
 			}
 			d.Log(ctx, LogEventTransitStart{LogEventTransit: LogEventTransit{transit: t}})
-			var result, err = func(t *Transit) (any, error) {
+			var result, err = func(t TransitInterface) (any, error) {
 				defer func() {
 					if err := recover(); err != nil {
 						e := ErrWorkerPanicked{panic: err}
@@ -474,7 +422,10 @@ func (d *DAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 							LogEventTransitError: LogEventTransitError{
 								LogEventTransit: LogEventTransit{transit: t},
 								LogEventError:   LogEventError{err: e}}})
-						d.context.Cancel(&e)
+						if !t.GetAllowFailure() {
+							d.context.Cancel(&e)
+							return
+						}
 					}
 				}()
 				return work(t)
@@ -486,16 +437,16 @@ func (d *DAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 						LogEventTransit: LogEventTransit{transit: t},
 						LogEventError:   LogEventError{err: err}},
 				})
-				d.context.Cancel(err)
-				return
 			} else if err != nil {
 				d.Log(ctx, LogEventTransitError{
 					LogEventTransit: LogEventTransit{transit: t},
 					LogEventError:   LogEventError{err: err}})
+			}
+			if err != nil && !t.GetAllowFailure() {
 				d.context.Cancel(err)
 				return
 			}
-			d.BuildWorkflowInput(ctx, result, t.channelOutputs...)
+			d.BuildWorkflowInput(ctx, result, t.GetChannelOutputs()...)
 		}(ctx, t)
 	}
 	return nil
@@ -504,7 +455,7 @@ func (d *DAG[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 // CloseWorkflow closes the workflow after execution.
 // After this method is executed, all input, output channels and transits will be deleted.
 // Note, please do not call this method during workflow execution, otherwise it will lead to unpredictable consequences.
-func (d *DAG[TInput, TOutput]) CloseWorkflow() {
+func (d *Workflow[TInput, TOutput]) CloseWorkflow() {
 	d.muChannels.Lock()
 	defer d.muChannels.Unlock()
 	d.channels = nil
@@ -518,7 +469,7 @@ func (d *DAG[TInput, TOutput]) CloseWorkflow() {
 // the execution results will be as expected, because the input of the subsequent task may be sent to the channel
 // before the previous task. If you want to execute multiple identical workflows in a short period of time
 // without unpredictable data transfer order, please instantiate a new workflow before each execution.
-func (d *DAG[TInput, TOutput]) Execute(root context.Context, input *TInput) *TOutput {
+func (d *Workflow[TInput, TOutput]) Execute(root context.Context, input *TInput) *TOutput {
 	// The sub-context is introduced and has a cancellation handler, making it easy to terminate the entire process
 	// at any time.
 	ctx, cancel := context.WithCancelCause(root)
@@ -564,13 +515,13 @@ func (d *DAG[TInput, TOutput]) Execute(root context.Context, input *TInput) *TOu
 }
 
 // RunOnce executes the workflow only once and destroys it. Calling Execute() or RunOnce() again will report an error.
-func (d *DAG[TInput, TOutput]) RunOnce(ctx context.Context, input *TInput) *TOutput {
+func (d *Workflow[TInput, TOutput]) RunOnce(ctx context.Context, input *TInput) *TOutput {
 	defer d.CloseWorkflow()
 	return d.Execute(ctx, input)
 }
 
 // Cancel an executing workflow. If there are no workflow executing, there will be no impact.
-func (d *DAG[TInput, TOutput]) Cancel(cause error) {
+func (d *Workflow[TInput, TOutput]) Cancel(cause error) {
 	d.muContext.RLock()
 	defer d.muContext.RUnlock()
 	if d.context == nil {
