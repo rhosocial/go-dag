@@ -416,10 +416,11 @@ func (d *Workflow[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 			// actively.
 			workerCtx, _ := context.WithCancelCause(ctx)
 			var work = func(t TransitInterface) (any, error) {
+				d.Log(ctx, LogEventTransitStart{LogEventTransit: LogEventTransit{transit: t}})
+				defer d.Log(ctx, LogEventTransitEnd{LogEventTransit: LogEventTransit{transit: t}})
 				return t.Run(workerCtx, *results...)
 			}
-			d.Log(ctx, LogEventTransitStart{LogEventTransit: LogEventTransit{transit: t}})
-			var result, err = func(t TransitInterface) (any, error) {
+			var result, _ = func(t TransitInterface) (any, error) {
 				defer func() {
 					if err := recover(); err != nil {
 						e := ErrWorkerPanicked{panic: err}
@@ -433,18 +434,18 @@ func (d *Workflow[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 						}
 					}
 				}()
-				return work(t)
+				result, err := work(t)
+				if err != nil {
+					d.Log(ctx, LogEventTransitError{
+						LogEventTransit: LogEventTransit{transit: t},
+						LogEventError:   LogEventError{err: err}})
+				}
+				if err != nil && !t.GetAllowFailure() {
+					d.context.Cancel(err)
+					return nil, err
+				}
+				return result, err
 			}(t)
-			d.Log(ctx, LogEventTransitEnd{LogEventTransit: LogEventTransit{transit: t}})
-			if err != nil {
-				d.Log(ctx, LogEventTransitError{
-					LogEventTransit: LogEventTransit{transit: t},
-					LogEventError:   LogEventError{err: err}})
-			}
-			if err != nil && !t.GetAllowFailure() {
-				d.context.Cancel(err)
-				return
-			}
 			d.BuildWorkflowInput(ctx, result, t.GetChannelOutputs()...)
 		}(ctx, t)
 	}
