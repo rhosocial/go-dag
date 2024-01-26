@@ -11,7 +11,6 @@ package simple
 
 import (
 	"context"
-	"errors"
 	"sync"
 )
 
@@ -84,6 +83,7 @@ type ChannelsInterface interface {
 	exists(name string) bool
 	get(name string) (chan any, error)
 	add(names ...string) error
+	close()
 }
 
 // Channels defines the channelInputs used by this directed acyclic graph.
@@ -155,6 +155,11 @@ func (d *Channels) add(names ...string) error {
 		d.channels[v] = make(chan any)
 	}
 	return nil
+}
+
+// close channels(only channelInput).
+func (d *Channels) close() {
+	close(d.channels[d.channelInput])
 }
 
 // ContextInterface represents the context interface that the workflow should implement.
@@ -431,13 +436,7 @@ func (d *Workflow[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 				return work(t)
 			}(t)
 			d.Log(ctx, LogEventTransitEnd{LogEventTransit: LogEventTransit{transit: t}})
-			if errors.As(err, &ErrValueTypeMismatch{}) {
-				d.Log(ctx, LogEventErrorValueTypeMismatch{
-					LogEventTransitError: LogEventTransitError{
-						LogEventTransit: LogEventTransit{transit: t},
-						LogEventError:   LogEventError{err: err}},
-				})
-			} else if err != nil {
+			if err != nil {
 				d.Log(ctx, LogEventTransitError{
 					LogEventTransit: LogEventTransit{transit: t},
 					LogEventError:   LogEventError{err: err}})
@@ -458,6 +457,7 @@ func (d *Workflow[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 func (d *Workflow[TInput, TOutput]) CloseWorkflow() {
 	d.muChannels.Lock()
 	defer d.muChannels.Unlock()
+	d.channels.close()
 	d.channels = nil
 }
 
