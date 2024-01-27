@@ -5,6 +5,7 @@
 package simple
 
 // Option defines the option used to instantiate a Workflow.
+// If an error occurs during instantiation, it needs to be reported. If no errors occurred, `nil` is returned.
 type Option[TInput, TOutput any] func(d *Workflow[TInput, TOutput]) error
 
 // NewWorkflow instantiates a workflow.
@@ -24,6 +25,9 @@ func NewWorkflow[TInput, TOutput any](options ...Option[TInput, TOutput]) (*Work
 // Note that names cannot be repeated, and repeated names are counted once.
 // All specified names must be used in the transit and may appear only once on the input and once on the output.
 // At least two channel names must be specified, for input and output.
+//
+// This method is not required. Because WithTransits() will automatically add the channels mentioned by each transit
+// to the channel list.
 func WithChannels[TInput, TOutput any](names ...string) Option[TInput, TOutput] {
 	return func(d *Workflow[TInput, TOutput]) error {
 		if d.channels == nil {
@@ -41,9 +45,6 @@ func WithChannels[TInput, TOutput any](names ...string) Option[TInput, TOutput] 
 // The channel with the same name will be reinitialized.
 func WithChannelInput[TInput, TOutput any](name string) Option[TInput, TOutput] {
 	return func(d *Workflow[TInput, TOutput]) error {
-		//if !d.channels.exists(name) {
-		//	return &ErrChannelNotExist{name: name}
-		//}
 		if d.channels == nil {
 			d.channels = NewWorkflowChannels()
 		}
@@ -88,8 +89,15 @@ func WithDefaultChannels[TInput, TOutput any]() Option[TInput, TOutput] {
 
 // WithTransits specifies specific nodes for the entire workflow.
 //
+// You can just call this method without calling WithChannels() to specify the input channel name.
+// This method will automatically add unregistered channel names to the channel list.
+//
 // This method can be executed multiple times. Those executed later will be merged with those executed earlier.
-// The channel with the same name will be reinitialized.
+//
+// You need to ensure that the input channel name list involved in each transit does not intersect with
+// the input channel name list of other transits, otherwise unpredictable consequences will occur during execution.
+//
+// So as the output channel list of every transit.
 func WithTransits[TInput, TOutput any](transits ...TransitInterface) Option[TInput, TOutput] {
 	return func(d *Workflow[TInput, TOutput]) error {
 		lenTransits := len(transits)
@@ -99,7 +107,23 @@ func WithTransits[TInput, TOutput any](transits ...TransitInterface) Option[TInp
 		if d.transits == nil {
 			d.transits = &Transits{transits: make([]TransitInterface, 0)}
 		}
-		d.transits.transits = append(d.transits.transits, transits...)
+		for _, t := range transits {
+			for _, c := range t.GetChannelInputs() {
+				if !d.channels.exists(c) {
+					if err := d.channels.add(c); err != nil {
+						return err
+					}
+				}
+			}
+			for _, c := range t.GetChannelOutputs() {
+				if !d.channels.exists(c) {
+					if err := d.channels.add(c); err != nil {
+						return err
+					}
+				}
+			}
+			d.transits.transits = append(d.transits.transits, t)
+		}
 		return nil
 	}
 }
