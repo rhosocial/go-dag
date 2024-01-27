@@ -37,6 +37,7 @@ func TestSimpleWorkflowValueTypeError_Error(t *testing.T) {
 	f, _ := NewWorkflow[string, string](
 		WithDefaultChannels[string, string](),
 		WithChannels[string, string]("t11"),
+		WithTransits[string, string](), // Testing with empty input will have no effect.
 		WithTransits[string, string](&Transit{
 			name:           "input",
 			channelInputs:  []string{"input"},
@@ -65,8 +66,8 @@ func NewWorkflowTwoParallelTransitsWithLogger() *Workflow[string, string] {
 		//c:input ----+----> c:t11 ------------> c:t21 -----+----> c:output
 		//            |             t:transit2              ^
 		//            +----> c:t12 ------------> c:t22 -----+
-		WithChannels[string, string]("input", "t11", "t12", "t21", "t22", "output"),
 		WithDefaultChannels[string, string](),
+		WithChannels[string, string]("t11", "t12", "t21", "t22"),
 		WithTransits[string, string](&Transit{
 			name:           "input",
 			channelInputs:  []string{"input"},
@@ -307,9 +308,9 @@ func TestSimpleWorkflowOneStraightPipeline(t *testing.T) {
 // NewWorkflowThreeParallelDelayedTransits defines a workflow.
 func NewWorkflowThreeParallelDelayedTransits() *Workflow[string, string] {
 	f, err := NewWorkflow[string, string](
-		WithLoggers[string, string](NewLogger()),
-		WithChannels[string, string]("input", "t11", "t12", "t13", "t21", "t22", "t23", "output"),
 		WithDefaultChannels[string, string](),
+		WithLoggers[string, string](NewLogger()),
+		WithChannels[string, string]("t11", "t12", "t13", "t21", "t22", "t23"),
 	)
 	//   input                   t11               t21              output
 	// ---------> input ----+--------> transit1 --------> transit ----------> output
@@ -470,11 +471,13 @@ func TestMultiDifferentTimeConsumingTasks(t *testing.T) {
 			worker:         worker,
 		},
 	}
-	f, _ := NewWorkflow[int, int](
-		WithChannels[int, int]("input", "t11", "output"),
+	f, err := NewWorkflow[int, int](
 		WithDefaultChannels[int, int](),
+		WithChannels[int, int]("t11"),
 		WithTransits[int, int](transits...),
 		WithLoggers[int, int](NewLogger()))
+	assert.Nil(t, err)
+	assert.NotNil(t, f)
 	t.Run("1s per task", func(t *testing.T) {
 		input := 1
 		output := f.Execute(context.Background(), &input)
@@ -523,11 +526,13 @@ func TestMultiDifferentTimeConsumingTasks(t *testing.T) {
 
 	// If you want to execute multiple identical workflows in a short period of time
 	// without unpredictable data transfer order, please instantiate a new workflow before each execution.
-	f1, _ := NewWorkflow[int, int](
-		WithChannels[int, int]("input", "t11", "output"),
+	f1, err := NewWorkflow[int, int](
 		WithDefaultChannels[int, int](),
+		WithChannels[int, int]("t11"),
 		WithTransits[int, int](transits...),
 		WithLoggers[int, int](NewLogger()))
+	assert.Nil(t, err)
+	assert.NotNil(t, f)
 	t.Run("1s and 2s per task in different workflow", func(t *testing.T) {
 		input1 := 2
 		input2 := 1

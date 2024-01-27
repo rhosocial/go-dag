@@ -18,11 +18,15 @@ import (
 //
 // TInput represents the input data type, and TOutput represents the output data type.
 type WorkflowInterface[TInput, TOutput any] interface {
-	// AddChannels attaches additional channel names. All channels are unbuffered.
-	AddChannels(channels ...string) error
+	// AddChannels adds additional channel names. All channels are unbuffered.
+	// Each name can only appear once.
+	// If it appears multiple times, subsequent occurrences of the same name will be ignored.
+	AddChannels(names ...string) error
 
-	// AddTransits attaches additional transits of workflow.
-	AddTransits(...TransitInterface)
+	// AddTransits adds additional transits of workflow.
+	// Each name can only appear once.
+	// If it appears multiple times, subsequent occurrences of the same name will be ignored.
+	AddTransits(transits ...TransitInterface)
 
 	// BuildWorkflow builds the workflow.
 	//
@@ -72,9 +76,11 @@ type WorkflowInterface[TInput, TOutput any] interface {
 	RunOnce(ctx context.Context, input *TInput) *TOutput
 
 	// Cancel an executing workflow. If there are no workflows executing, there will be no impact.
+	// If the context passed in during execution is cancelable,
+	// it can also be canceled directly without calling this method.
 	Cancel(cause error)
 
-	// Log a log.
+	// Log several logs.
 	Log(ctx context.Context, events ...LogEventInterface)
 }
 
@@ -138,7 +144,7 @@ func (d *Channels) get(name string) (chan any, error) {
 // add channels.
 // Note that the channel name to be added cannot already exist. Otherwise, `ErrChannelNameExisted` will be returned.
 func (d *Channels) add(names ...string) error {
-	if d == nil {
+	if d == nil || d.channels == nil {
 		return ErrChannelNotInitialized{}
 	}
 	d.muChannels.Lock()
