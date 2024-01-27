@@ -52,7 +52,7 @@ jobs:
         uses: ad-m/github-push-action@master
         with:
           github_token: ${{ github.token }}
-          branch: refs/head/r1.0
+          branch: refs/heads/r1.0
 
       - name: Benchmark
         run: go test -race -v ./... -bench . -run ^$ -count 10 -benchmem
