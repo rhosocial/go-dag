@@ -11,7 +11,6 @@ package simple
 
 import (
 	"context"
-	"errors"
 	"sync"
 )
 
@@ -19,11 +18,15 @@ import (
 //
 // TInput represents the input data type, and TOutput represents the output data type.
 type WorkflowInterface[TInput, TOutput any] interface {
-	// AddChannels attaches additional channel names. All channels are unbuffered.
-	AddChannels(channels ...string) error
+	// AddChannels adds additional channel names. All channels are unbuffered.
+	// Each name can only appear once.
+	// If it appears multiple times, subsequent occurrences of the same name will be ignored.
+	AddChannels(names ...string) error
 
-	// AddTransits attaches additional transits of workflow.
-	AddTransits(...TransitInterface)
+	// AddTransits adds additional transits of workflow.
+	// Each name can only appear once.
+	// If it appears multiple times, subsequent occurrences of the same name will be ignored.
+	AddTransits(transits ...TransitInterface)
 
 	// BuildWorkflow builds the workflow.
 	//
@@ -73,9 +76,11 @@ type WorkflowInterface[TInput, TOutput any] interface {
 	RunOnce(ctx context.Context, input *TInput) *TOutput
 
 	// Cancel an executing workflow. If there are no workflows executing, there will be no impact.
+	// If the context passed in during execution is cancelable,
+	// it can also be canceled directly without calling this method.
 	Cancel(cause error)
 
-	// Log a log.
+	// Log several logs.
 	Log(ctx context.Context, events ...LogEventInterface)
 }
 
@@ -84,6 +89,7 @@ type ChannelsInterface interface {
 	exists(name string) bool
 	get(name string) (chan any, error)
 	add(names ...string) error
+	close()
 }
 
 // Channels defines the channelInputs used by this directed acyclic graph.
@@ -138,7 +144,7 @@ func (d *Channels) get(name string) (chan any, error) {
 // add channels.
 // Note that the channel name to be added cannot already exist. Otherwise, `ErrChannelNameExisted` will be returned.
 func (d *Channels) add(names ...string) error {
-	if d == nil {
+	if d == nil || d.channels == nil {
 		return ErrChannelNotInitialized{}
 	}
 	d.muChannels.Lock()
@@ -155,6 +161,11 @@ func (d *Channels) add(names ...string) error {
 		d.channels[v] = make(chan any)
 	}
 	return nil
+}
+
+// close channels(only channelInput).
+func (d *Channels) close() {
+	close(d.channels[d.channelInput])
 }
 
 // ContextInterface represents the context interface that the workflow should implement.
@@ -411,10 +422,11 @@ func (d *Workflow[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 			// actively.
 			workerCtx, _ := context.WithCancelCause(ctx)
 			var work = func(t TransitInterface) (any, error) {
+				d.Log(ctx, LogEventTransitStart{LogEventTransit: LogEventTransit{transit: t}})
+				defer d.Log(ctx, LogEventTransitEnd{LogEventTransit: LogEventTransit{transit: t}})
 				return t.Run(workerCtx, *results...)
 			}
-			d.Log(ctx, LogEventTransitStart{LogEventTransit: LogEventTransit{transit: t}})
-			var result, err = func(t TransitInterface) (any, error) {
+			var result, _ = func(t TransitInterface) (any, error) {
 				defer func() {
 					if err := recover(); err != nil {
 						e := ErrWorkerPanicked{panic: err}
@@ -428,24 +440,18 @@ func (d *Workflow[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 						}
 					}
 				}()
-				return work(t)
-			}(t)
-			d.Log(ctx, LogEventTransitEnd{LogEventTransit: LogEventTransit{transit: t}})
-			if errors.As(err, &ErrValueTypeMismatch{}) {
-				d.Log(ctx, LogEventErrorValueTypeMismatch{
-					LogEventTransitError: LogEventTransitError{
+				result, err := work(t)
+				if err != nil {
+					d.Log(ctx, LogEventTransitError{
 						LogEventTransit: LogEventTransit{transit: t},
-						LogEventError:   LogEventError{err: err}},
-				})
-			} else if err != nil {
-				d.Log(ctx, LogEventTransitError{
-					LogEventTransit: LogEventTransit{transit: t},
-					LogEventError:   LogEventError{err: err}})
-			}
-			if err != nil && !t.GetAllowFailure() {
-				d.context.Cancel(err)
-				return
-			}
+						LogEventError:   LogEventError{err: err}})
+				}
+				if err != nil && !t.GetAllowFailure() {
+					d.context.Cancel(err)
+					return nil, err
+				}
+				return result, err
+			}(t)
 			d.BuildWorkflowInput(ctx, result, t.GetChannelOutputs()...)
 		}(ctx, t)
 	}
@@ -458,6 +464,7 @@ func (d *Workflow[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 func (d *Workflow[TInput, TOutput]) CloseWorkflow() {
 	d.muChannels.Lock()
 	defer d.muChannels.Unlock()
+	d.channels.close()
 	d.channels = nil
 }
 

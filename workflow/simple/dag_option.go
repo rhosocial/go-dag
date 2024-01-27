@@ -60,9 +60,6 @@ func WithChannelInput[TInput, TOutput any](name string) Option[TInput, TOutput] 
 // The channel with the same name will be reinitialized.
 func WithChannelOutput[TInput, TOutput any](name string) Option[TInput, TOutput] {
 	return func(d *Workflow[TInput, TOutput]) error {
-		//if !d.channels.exists(name) {
-		//	return &ErrChannelNotExist{name: name}
-		//}
 		if d.channels == nil {
 			d.channels = NewWorkflowChannels()
 		}
@@ -79,7 +76,10 @@ func WithDefaultChannels[TInput, TOutput any]() Option[TInput, TOutput] {
 		if d.channels == nil {
 			d.channels = NewWorkflowChannels()
 		}
-		d.channels.add("input", "output")
+		err := d.channels.add("input", "output")
+		if err != nil {
+			return err
+		}
 		d.channels.channelInput = "input"
 		d.channels.channelOutput = "output"
 		return nil
@@ -93,15 +93,13 @@ func WithDefaultChannels[TInput, TOutput any]() Option[TInput, TOutput] {
 func WithTransits[TInput, TOutput any](transits ...TransitInterface) Option[TInput, TOutput] {
 	return func(d *Workflow[TInput, TOutput]) error {
 		lenTransits := len(transits)
-		if d.transits == nil {
-			d.transits = &Transits{transits: make([]TransitInterface, lenTransits)}
-		}
 		if lenTransits == 0 {
 			return nil
 		}
-		for i, t := range transits {
-			d.transits.transits[i] = t
+		if d.transits == nil {
+			d.transits = &Transits{transits: make([]TransitInterface, 0)}
 		}
+		d.transits.transits = append(d.transits.transits, transits...)
 		return nil
 	}
 }

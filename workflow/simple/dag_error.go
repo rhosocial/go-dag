@@ -84,7 +84,7 @@ type ErrWorkerPanicked struct {
 }
 
 func (e ErrWorkerPanicked) Error() string {
-	return fmt.Sprintf("worker panicked.")
+	return "worker panicked"
 }
 
 // ErrValueTypeMismatch defines that the data type output by the node is inconsistent with expectation.
@@ -104,18 +104,4 @@ func (e ErrValueTypeMismatch) Error() string {
 // does not match the actual.
 func NewErrValueTypeMismatch(expect, actual any, input string) ErrValueTypeMismatch {
 	return ErrValueTypeMismatch{expect: expect, actual: actual, input: input}
-}
-
-// ErrTransitChannelNonExist indicates that the channel(s) to be used by the specified node does not exist.
-type ErrTransitChannelNonExist struct {
-	ErrChannelInterface
-	ErrTransitInterface
-	transitName    string
-	channelInputs  []string
-	channelOutputs []string
-}
-
-func (e ErrTransitChannelNonExist) Error() string {
-	return fmt.Sprintf("The specified channel(s) does not exist: input[%v], output[%v]",
-		strings.Join(e.channelInputs, ", "), strings.Join(e.channelOutputs, ", "))
 }
