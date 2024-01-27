@@ -1,4 +1,5 @@
 # go-dag
+![Coverage](https://img.shields.io/badge/Coverage-89.7%25-brightgreen)
 
 A framework developed in Go that manages the execution of workflows described by directed acyclic graphs.
 
