@@ -30,6 +30,10 @@ jobs:
         run: |
           go test -race -cover -v ./... -coverprofile coverage.out -coverpkg ./...
           go tool cover -func=coverage.out -o=coverage.out
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v3
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
       - name: Go Coverage Badge
         uses: tj-actions/coverage-badge-go@v2
         with:
