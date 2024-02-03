@@ -1,6 +1,4 @@
 # go-dag
-![Coverage](https://img.shields.io/badge/Coverage-90.0%25-brightgreen)
-
 A framework developed in Go that manages the execution of workflows described by directed acyclic graphs.
 
 Unlike any other DAG framework, this framework does not emphasize concepts such as edges and vertices,
@@ -11,7 +9,7 @@ but allows users to focus on defining tasks and their inputs and outputs.
 ![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/rhosocial/go-dag)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rhosocial/go-dag)](https://goreportcard.com/report/github.com/rhosocial/go-dag)
 ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/rhosocial/go-dag/go.yml?branch=r1.0)
-
+[![Codecov coverage](https://codecov.io/gh/rhosocial/go-dag/branch/r1.0/graph/badge.svg)](https://app.codecov.io/gh/rhosocial/go-dag/tree/r1.0)
 
 ## Introduction
 

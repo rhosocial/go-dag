@@ -34,7 +34,7 @@ func TestSimpleWorkflowChannel_Exists(t *testing.T) {
 func TestSimpleWorkflowValueTypeError_Error(t *testing.T) {
 	logger := NewLogger()
 	logger.SetFlags(LDebugEnabled)
-	f, _ := NewWorkflow[string, string](
+	f, err := NewWorkflow[string, string](
 		WithDefaultChannels[string, string](),
 		WithChannels[string, string]("t11"),
 		WithTransits[string, string](), // Testing with empty input will have no effect.
@@ -54,6 +54,7 @@ func TestSimpleWorkflowValueTypeError_Error(t *testing.T) {
 			},
 		}),
 		WithLoggers[string, string](logger))
+	assert.Nil(t, err)
 	input := "input"
 	assert.Nil(t, f.Execute(context.Background(), &input))
 	assert.Nil(t, f.RunOnce(context.Background(), &input))
@@ -1204,4 +1205,117 @@ func TestTransitAllowFailure(t *testing.T) {
 		//	[]string{errors1[0].(LogEventTransitCanceled).transit.name, errors1[1].(LogEventTransitCanceled).transit.name})
 	})
 	log.Println("finished")
+}
+
+func TestNewWorkflowNotWithChannels(t *testing.T) {
+	logger := NewLogger()
+	logger.SetFlags(LDebugEnabled)
+	now := time.Now()
+	errorCollector := NewErrorCollector()
+	go errorCollector.Listen(context.Background())
+	worker1 := func(ctx context.Context, a ...any) (any, error) {
+		log.Println("started at", time.Now())
+		s := 1
+		if a[0] != nil {
+			s = a[0].(int)
+		}
+		time.Sleep(time.Duration(s) * time.Second)
+		log.Println("ended at", time.Now())
+		since := time.Since(now)
+		if since.Milliseconds() > 4000 {
+			panic(fmt.Errorf("panicked at %v", time.Since(now)))
+		}
+		return s, fmt.Errorf("error occurred at %v", time.Since(now))
+	}
+	worker2 := func(ctx context.Context, a ...any) (any, error) {
+		channelInputs1 := []string{"i:input"}
+		channelOutputs1 := []string{"i:t11"}
+		channelOutputs2 := []string{"i:output"}
+		transits := []TransitInterface{
+			NewTransit("i:input", WithInputs(channelInputs1...), WithOutputs(channelOutputs1...), WithWorker(worker1),
+				WithAllowFailure(true)),
+			NewTransit("i:output", WithInputs(channelOutputs1...), WithOutputs(channelOutputs2...), WithWorker(worker1),
+				WithAllowFailure(true)),
+		}
+		f1, _ := NewWorkflow[int, int](
+			WithChannelInput[int, int]("i:input"),
+			WithChannelOutput[int, int]("i:output"),
+			WithTransits[int, int](transits...),
+			WithLoggers[int, int](logger, errorCollector))
+		input := 1
+		if a[0] != nil {
+			input = a[0].(int)
+		}
+		output := f1.Execute(ctx, &input)
+		if output == nil {
+			return nil, nil
+		}
+		return *output, nil
+	}
+	channelInputs1 := []string{"input"}
+	channelOutputs1 := []string{"t11"}
+	channelOutputs2 := []string{"t12"}
+	channelOutputs3 := []string{"output"}
+	transits := []TransitInterface{
+		NewTransit("input",
+			WithInputs(channelInputs1...),
+			WithOutputs(channelOutputs1...),
+			WithWorker(worker1), WithAllowFailure(true)),
+		NewTransit("transit",
+			WithInputs(channelOutputs1...),
+			WithOutputs(channelOutputs2...),
+			WithWorker(worker2), WithAllowFailure(true)),
+		NewTransit("output", WithInputs(channelOutputs2...), WithOutputs(channelOutputs3...), WithWorker(worker1),
+			WithAllowFailure(true)),
+	}
+	f, _ := NewWorkflow[int, int](
+		WithDefaultChannels[int, int](),
+		WithTransits[int, int](transits...),
+		WithLoggers[int, int](logger, errorCollector))
+	input := 1
+	t.Run("cancel before run", func(t *testing.T) {
+		f.Cancel(errors.New("cancel before run"))
+	})
+	t.Run("cancel when running", func(t *testing.T) {
+		ch1 := make(chan struct{})
+		var output = new(int)
+		go func() {
+			output = f.Execute(context.Background(), &input)
+			assert.Nil(t, output)
+			ch1 <- struct{}{}
+		}()
+		<-ch1
+		time.Sleep(time.Millisecond)
+
+		errors1 := errorCollector.Get()
+		assert.Len(t, errors1, 5)
+	})
+	log.Println("finished")
+}
+
+func TestNewWorkflowReportedError(t *testing.T) {
+	t.Run("empty parameters without error(s)", func(t *testing.T) {
+		f, err := NewWorkflow[int, int]()
+		assert.NotNil(t, f)
+		assert.IsType(t, &Workflow[int, int]{}, f)
+		assert.Nil(t, err)
+	})
+	t.Run("with error", func(t *testing.T) {
+		f, err := NewWorkflow[int, int](func(d *Workflow[int, int]) error {
+			return errors.New("initializes a workflow with error")
+		})
+		assert.Nil(t, f)
+		assert.Errorf(t, err, "initializes a workflow with error")
+	})
+	t.Run("with channel output", func(t *testing.T) {
+		f, err := NewWorkflow[int, int](WithChannelOutput[int, int]("output"))
+		assert.NotNil(t, f)
+		assert.IsType(t, &Workflow[int, int]{}, f)
+		assert.Nil(t, err)
+	})
+	t.Run("with default channels after channel input specified", func(t *testing.T) {
+		f, err := NewWorkflow[int, int](WithChannels[int, int]("output"), WithDefaultChannels[int, int]())
+		assert.Nil(t, f)
+		assert.Errorf(t, err, "the channel[input] has existed")
+	})
 }

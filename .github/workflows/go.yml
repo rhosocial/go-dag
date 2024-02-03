@@ -28,31 +28,13 @@ jobs:
 
       - name: Test
         run: |
-          go test -race -cover -v ./... -coverprofile coverage.out -coverpkg ./...
-          go tool cover -func=coverage.out -o=coverage.out
-      - name: Go Coverage Badge
-        uses: tj-actions/coverage-badge-go@v2
+          go test -race -cover -v ./... -coverprofile coverage.txt -coverpkg ./...
+          go tool cover -func=coverage.txt -o=coverage.out
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v3
         with:
-          green: 80
-          filename: coverage.out
-      - name: Verify Changed files
-        uses: tj-actions/verify-changed-files@v16
-        id: verify-changed-files
-        with:
-          files: README.md
-      - name: Commit coverage changes
-        if: steps.verify-changed-files.outputs.files_changed == 'true'
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add README.md
-          git commit -m "chore: Updated coverage badge."
-      - name: Push coverage changes
-        if: steps.verify-changed-files.outputs.files_changed == 'true'
-        uses: ad-m/github-push-action@master
-        with:
-          github_token: ${{ github.token }}
-          branch: refs/heads/r1.0
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.txt
 
       - name: Benchmark
         run: go test -race -v ./... -bench . -run ^$ -count 10 -benchmem

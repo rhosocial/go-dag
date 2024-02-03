@@ -205,7 +205,7 @@ func (d *Loggers) Log(ctx context.Context, events ...LogEventInterface) {
 		if logger == nil {
 			continue
 		}
-		logger.Log(ctx, events...)
+		go logger.Log(ctx, events...) // prevent the logger from blocking subsequent execution.
 	}
 }
 
