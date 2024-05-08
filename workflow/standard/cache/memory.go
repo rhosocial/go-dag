@@ -1,3 +1,7 @@
+// Copyright (c) 2023 - 2024 vistart. All rights reserved.
+// Use of this source code is governed by Apache-2.0 license
+// that can be found in the LICENSE file.
+
 package cache
 
 import (
@@ -5,35 +9,43 @@ import (
 	"sync"
 )
 
+// ErrKeyNotFound represents an error indicating that a key was not found in the cache.
 type ErrKeyNotFound struct {
 	key string
 	error
 }
 
+// Error returns the error message for ErrKeyNotFound.
 func (e ErrKeyNotFound) Error() string {
 	return fmt.Sprintf("key %s not found in cache", e.key)
 }
 
+// ErrKeyExpired represents an error indicating that a key has expired in the cache.
 type ErrKeyExpired struct {
 	key string
 	error
 }
 
+// Error returns the error message for ErrKeyExpired.
 func (e ErrKeyExpired) Error() string {
 	return fmt.Sprintf("key %s has expired", e.key)
 }
 
+// MemoryCache represents an in-memory cache implementation.
 type MemoryCache struct {
 	mu    sync.RWMutex
 	items map[string]*Item
 }
 
+// NewMemoryCache creates and initializes a new MemoryCache instance.
 func NewMemoryCache() *MemoryCache {
 	return &MemoryCache{
 		items: make(map[string]*Item),
 	}
 }
 
+// Get retrieves the value associated with the given key from the cache.
+// If the key is not found or has expired, it returns an error.
 func (c *MemoryCache) Get(key KeyGetter) (any, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -50,6 +62,8 @@ func (c *MemoryCache) Get(key KeyGetter) (any, error) {
 	return nil, ErrKeyExpired{key: keyGetter.GetKey()}
 }
 
+// Set sets the value associated with the given key in the cache.
+// It accepts optional ItemOption functions to customize the cache item.
 func (c *MemoryCache) Set(key KeyGetter, value any, options ...ItemOption) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -68,6 +82,7 @@ func (c *MemoryCache) Set(key KeyGetter, value any, options ...ItemOption) error
 	return nil
 }
 
+// Delete removes the value associated with the given key from the cache.
 func (c *MemoryCache) Delete(key KeyGetter) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -75,6 +90,7 @@ func (c *MemoryCache) Delete(key KeyGetter) error {
 	return nil
 }
 
+// Clear removes all items from the cache.
 func (c *MemoryCache) Clear() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
