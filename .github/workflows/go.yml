@@ -5,9 +5,9 @@ name: Go
 
 on:
   push:
-    branches: [ "r1.0" ]
+    branches: [ "r1.0", "r1.1" ]
   pull_request:
-    branches: [ "r1.0" ]
+    branches: [ "r1.0", "r1.1" ]
 
 jobs:
   go20_redis7_mysql8:
