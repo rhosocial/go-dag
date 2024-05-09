@@ -285,10 +285,23 @@ func (d *Workflow[TInput, TOutput]) BuildWorkflowInput(ctx context.Context, resu
 	for i := 0; i < len(inputs); i++ {
 		i := i
 		go func() {
-			if chs[i] != nil {
-				d.Log(ctx, LogEventChannelInputReady{LogEventChannelReady{value: result, name: inputs[i]}})
-				chs[i] <- result
+			if chs[i] == nil {
+				return
 			}
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case chs[i] <- result:
+					d.Log(ctx, LogEventChannelInputReady{LogEventChannelReady{value: result, name: inputs[i]}})
+					return
+				default:
+				}
+			}
+			//if chs[i] != nil {
+			//	d.Log(ctx, LogEventChannelInputReady{LogEventChannelReady{value: result, name: inputs[i]}})
+			//	chs[i] <- result
+			//}
 		}()
 	}
 }
