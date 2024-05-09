@@ -1044,7 +1044,7 @@ func TestCancelWorkflowByCtx(t *testing.T) {
 			ch1 <- struct{}{}
 		}()
 		<-ch1
-		time.Sleep(time.Millisecond)
+		time.Sleep(time.Millisecond * 100)
 
 		errors1 := errorCollector.Get()
 		assert.Len(t, errors1, 2)
