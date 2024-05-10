@@ -1,5 +1,5 @@
 # go-dag
-A framework developed in Go that manages the execution of workflows described by directed acyclic graphs.
+A Go-based framework has been developed to oversee the execution of workflows delineated by directed acyclic graphs (DAGs).
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/rhosocial/go-dag.svg)](https://pkg.go.dev/github.com/rhosocial/go-dag)
 [![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go)  
@@ -9,34 +9,35 @@ A framework developed in Go that manages the execution of workflows described by
 ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/rhosocial/go-dag/go.yml?branch=r1.0)
 [![Codecov coverage](https://codecov.io/gh/rhosocial/go-dag/branch/r1.0/graph/badge.svg)](https://app.codecov.io/gh/rhosocial/go-dag/tree/r1.0)
 
-Unlike any other DAG framework, `GO-DAG` does not emphasize concepts such as edges and vertices,
-but allows users to focus on defining `transit`(worker and its inputs and outputs).
-`GO-DAG` will automatically builds workflows based on user-defined transits and then executes them.
+Unlike other DAG frameworks, `GO-DAG` does not prioritize concepts like edges and vertices.
+Instead, it enables users to concentrate on defining transits (workers along with their inputs and outputs). 
+`GO-DAG` automatically constructs workflows based on these user-defined transits and subsequently executes them.
 
-Now this project is fully tested in Go 1.20, 1.21, 1.22, and always be adapted to the latest version.
+As of now, the project is thoroughly tested in Go versions 1.20, 1.21, and 1.22,
+and it continuously adapts to the latest version available.
 
-This project always adheres to zero external dependencies,
-that is, it only relies on internal code packages (except for testing).
+Furthermore, the project maintains a strict adherence to zero external dependencies,
+relying solely on internal code packages (excluding testing requirements).
 
 ## Introduction
 
-`GO-DAG` consists of several code packages that differ in the complexity of the described workflows.
+`GO-DAG` comprises multiple code packages, each tailored to various levels of workflow complexity.
 
-Currently, the released versions include:
+Presently, the released versions encompass:
 
-- [workflow/simple](workflow/simple): used to describe simple workflows, supports DAGs of any complexity,
-and has logging capabilities that allow custom transits and log events. Although simple, it can satisfy most scenarios.
+- [workflow/simple](workflow/simple): Designed for describing straightforward workflows, it supports DAGs of any complexity.
+It also features logging capabilities enabling customization of transits and log events. Despite its simplicity, it adequately fulfills the requirements of most scenarios.
 
-> In the future, workflows with more complex functions will be introduced.
+> In the future, more complex workflow functionalities will be introduced to cater to diverse needs.
 
 ## Reference
 
-If you want to know the specific usage of `GO-DAG` and more details, please visit [this](https://docs.go-dag.dev.rho.social/).
+If you seek detailed usage instructions and further information about `GO-DAG`, please visit [this](https://docs.go-dag.dev.rho.social/).
 
-If you want real-person online guidance on how to use it, you can:
+If you prefer real-time assistance from a person regarding how to use it, you can:
 
 [![Gitter](https://img.shields.io/gitter/room/rhosocial/go-dag)](https://matrix.to/#/#go-dag.rhosocial:gitter.im)
 
-If you want guidance on using this framework to transform your complex tasks into the most efficient workflows, you can start by donating to:
+If you're seeking guidance on leveraging this framework to streamline your complex tasks into highly efficient workflows, you can begin by donating to:
 
 [![Donate](https://liberapay.com/assets/widgets/donate.svg)](https://liberapay.com/vistart/donate)

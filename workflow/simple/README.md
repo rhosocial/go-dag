@@ -4,20 +4,20 @@
 
 - Workflow:
   - No limit to the complexity of a directed acyclic graph.
-  - Single input and single output.
-  - Canceled at any time during execution.
-  - Shipped with any loggers.
+  - Supports single input and single output.
+  - Can be canceled at any time during execution.
+  - Comes with support for various loggers.
 - Transit:
-  - TransitInterface: Allow custom transits.
-  - Any inputs and outputs(except the initial input and final output).
-  - The worker accepts the incoming context parameter and allows receiving `Done()` signal.
-  - Any worker error will terminate the execution and notify all the loggers to record events, including `panic()` and recover from it.
+  - Provides `TransitInterface` for custom transits.
+  - Allows any inputs and outputs (excluding initial input and final output).
+  - Workers accept the incoming context parameter and can receive a `Done()` signal.
+  - Any worker error terminates execution and notifies all loggers to record events, including `panic()` and recovery.
 - Logger:
-  - LoggerInterface: Allow custom loggers.
+  - Provides `LoggerInterface` for custom loggers.
   - Predefined four log levels.
-  - Default logger: Log events are output to the standard output and standard error.
-  - Error collector: Collect errors generated during workflow execution.
+  - Default logger: Logs events to standard output and standard error.
+  - Error collector: Gathers errors generated during workflow execution.
 
 ## Reference
 
-For more details, please visit [this](https://docs.go-dag.dev.rho.social/basic-usage/use-simple.dag).
+For further details, please visit [this](https://docs.go-dag.dev.rho.social/basic-usage/use-simple.dag).
