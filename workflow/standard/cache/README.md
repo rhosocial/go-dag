@@ -1,6 +1,6 @@
 # cache
 
-This code package defines the cache interface and the simplest cache implementation.
+This code package defines the cache interface and the most basic cache implementation.
 
 ## [interface.go](interface.go)
 
@@ -41,4 +41,7 @@ leaving the implementation details of how to compose keys up to you.
 
 `memory.go` defines the simplest in-memory cache. 
 
-This implementation is only used for demonstration and testing purposes of the cache interface and cache item interface.
+
+This functionality solely provides implementation samples for cache definition and is not recommended for actual production use.
+This is because the functionality employs pointers to cache items, which would necessitate periodic scanning by the garbage collector,
+thus potentially lowering performance.
