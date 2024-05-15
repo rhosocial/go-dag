@@ -32,15 +32,25 @@ func (e ErrKeyExpired) Error() string {
 }
 
 // MemoryCache represents an in-memory cache implementation.
+//
+// MemoryCache supports cache item expiration. When adding a cache item, you can specify an expiration time or
+// a validity period. If no expiration time is specified, the item is considered permanently valid.
+// There is no limit to the number of cache items in MemoryCache. To avoid data race conditions in concurrent scenarios,
+// MemoryCache employs locking mechanisms. As a result, having too many items can impact concurrent access performance.
+// Additionally, to prevent frequent garbage collection scans and to avoid external modifications affecting the cache,
+// MemoryCache stores the original content of the items, meaning that both storing and retrieving items
+// involve copying values. It is also recommended that users do not cache pointers or excessively large items.
+// Therefore, MemoryCache is not suitable for scenarios with a large number of cache items and
+// high concurrent performance requirements.
 type MemoryCache struct {
 	mu    sync.RWMutex
-	items map[string]*Item
+	items map[string]Item
 }
 
 // NewMemoryCache creates and initializes a new MemoryCache instance.
 func NewMemoryCache() *MemoryCache {
 	return &MemoryCache{
-		items: make(map[string]*Item),
+		items: make(map[string]Item),
 	}
 }
 
@@ -58,7 +68,7 @@ func (c *MemoryCache) Get(key KeyGetter) (any, error) {
 	if !item.Expired() {
 		return item.Value(), nil
 	}
-	delete(c.items, keyGetter.GetKey())
+	defer delete(c.items, keyGetter.GetKey())
 	return nil, ErrKeyExpired{key: keyGetter.GetKey()}
 }
 
@@ -78,7 +88,7 @@ func (c *MemoryCache) Set(key KeyGetter, value any, options ...ItemOption) error
 	}
 
 	keyGetter := key
-	c.items[keyGetter.GetKey()] = item
+	c.items[keyGetter.GetKey()] = *item
 	return nil
 }
 
@@ -94,6 +104,6 @@ func (c *MemoryCache) Delete(key KeyGetter) error {
 func (c *MemoryCache) Clear() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.items = make(map[string]*Item)
+	c.items = make(map[string]Item)
 	return nil
 }
