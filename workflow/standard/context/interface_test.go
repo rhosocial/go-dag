@@ -41,6 +41,26 @@ func (o MockOptions) setTransit(transit string, key string, value any) error {
 	return nil
 }
 
+type MockReports struct {
+	ReportsInterface
+}
+
+func (o MockReports) GetGlobal(key string) (any, error) {
+	return nil, nil
+}
+
+func (o MockReports) AddGlobal(key string, value any) error {
+	return nil
+}
+
+func (o MockReports) GetTransit(transit string, key string) (any, error) {
+	return nil, nil
+}
+
+func (o MockReports) AddTransit(transit string, key string, value any) error {
+	return nil
+}
+
 // Ensure MockIdentifier implements IdentifierInterface
 var _ IdentifierInterface = (*MockIdentifier)(nil)
 
@@ -75,17 +95,26 @@ func TestNewContext(t *testing.T) {
 	assert.NotNil(t, c3)
 	assert.Equal(t, mockOptions, c3.options)
 
+	// Test with WithOptions option
+	mockReports := &MockReports{}
+	c4, err := NewContext(WithReports(mockReports))
+	assert.NoError(t, err)
+	assert.NotNil(t, c4)
+	assert.Equal(t, mockReports, c4.reports)
+
 	// Test with multiple options
-	c4, err := NewContext(
+	c, err := NewContext(
 		WithContext(ctx, cancel),
 		WithIdentifier(mockIdentifier),
 		WithOptions(mockOptions),
+		WithReports(mockReports),
 	)
 	assert.NoError(t, err)
-	assert.NotNil(t, c4)
-	assert.Equal(t, ctx, c4.context)
-	assert.Equal(t, mockIdentifier, c4.identifier)
-	assert.Equal(t, mockOptions, c4.options)
+	assert.NotNil(t, c)
+	assert.Equal(t, ctx, c.context)
+	assert.Equal(t, mockIdentifier, c.identifier)
+	assert.Equal(t, mockOptions, c.options)
+	assert.Equal(t, mockReports, c.reports)
 }
 
 // Test the Cancel method

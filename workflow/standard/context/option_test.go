@@ -39,6 +39,17 @@ func TestNewOptions(t *testing.T) {
 	assert.Equal(t, "abc", err.Error())
 }
 
+func TestNewOptionsSetGlobalEmpty(t *testing.T) {
+	options, err := NewOptions()
+	if err != nil {
+		t.Fail()
+		return
+	}
+	assert.NotNil(t, options)
+	err = options.setGlobal("abc", "123")
+	assert.NoError(t, err)
+}
+
 func WithTransitsOptions() OptionsItem {
 	return func(o *Options) error {
 		return o.setTransit("t1", "abc", "123")

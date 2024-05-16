@@ -16,14 +16,40 @@ type Interface interface {
 
 // Context represents a context instance that encapsulates a context.Context and
 // additional functionalities for managing cancellations and request-scoped values.
+//
+// Context is used to represent the context of a single execution. In addition to
+// holding the context and cancel function, it carries the identifier for the execution,
+// all configuration options, and the post-execution reports. This Context is used to
+// distinguish between different executions fed into the same workflow.
 type Context struct {
+	// context holds the standard context.Context instance.
+	// This field is exported to the ctx parameter passed to the worker in the transit.
 	context context.Context
-	cancel  context.CancelCauseFunc
+
+	// cancel holds the cancel function that can cancel the context with a specific cause.
+	cancel context.CancelCauseFunc
 
 	Interface
 
+	// identifier holds an instance of IdentifierInterface for managing unique identifiers.
 	identifier IdentifierInterface
-	options    OptionsInterface
+
+	// options holds an instance of OptionsInterface for storing configuration options.
+	//
+	// The options are used to adjust the behavior of both global and specific transit executions,
+	// but do not store parameters passed to the transit's worker. Therefore, the worker in the transit
+	// cannot see the current options, meaning these options cannot be used to pass parameters to the worker.
+	//
+	// This field is optional; if not specified, it means there are no additional parameters for this execution.
+	options OptionsInterface
+
+	// reports holds an instance of ReportsInterface for managing the reports of the current execution.
+	//
+	// This reports instance is used to collect content reported by the workflow during execution,
+	// and thus it is not visible to the worker in the transit.
+	//
+	// This field is optional; if not specified, it means no reports will be collected for this execution.
+	reports ReportsInterface
 }
 
 // Cancel cancels the context with the provided error cause.
@@ -67,6 +93,14 @@ func WithIdentifier(identifier IdentifierInterface) Option {
 func WithOptions(options OptionsInterface) Option {
 	return func(context *Context) error {
 		context.options = options
+		return nil
+	}
+}
+
+// WithReports sets the reports for the context.
+func WithReports(reports ReportsInterface) Option {
+	return func(context *Context) error {
+		context.reports = reports
 		return nil
 	}
 }
