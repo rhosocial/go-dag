@@ -21,6 +21,11 @@ type Interface interface {
 // holding the context and cancel function, it carries the identifier for the execution,
 // all configuration options, and the post-execution reports. This Context is used to
 // distinguish between different executions fed into the same workflow.
+//
+// The eventManager field provides functionality for handling events sent by workflow or transit workers
+// and dispatching them to registered subscribers. This enables asynchronous communication and event-driven
+// processing within the workflow. If eventManager is not specified, events will not be listened to or sent
+// to any subscribers for this execution, making it an optional field depending on the needs of the workflow.
 type Context struct {
 	// context holds the standard context.Context instance.
 	// This field is exported to the ctx parameter passed to the worker in the transit.
@@ -50,6 +55,18 @@ type Context struct {
 	//
 	// This field is optional; if not specified, it means no reports will be collected for this execution.
 	reports ReportsInterface
+
+	// eventManager holds an instance of EventManagerInterface for managing events and subscribers.
+	//
+	// The eventManager is responsible for handling events sent by the workflow or transit workers
+	// and dispatching them to the registered subscribers. This allows for asynchronous communication
+	// and event-driven processing within the workflow. Subscribers can listen for specific events
+	// and act upon them when they occur.
+	//
+	// This field is optional; if not specified, it means events will not be listened to or sent
+	// to any subscribers for this execution. If event-driven communication is not needed,
+	// this field can be left unspecified.
+	eventManager EventManagerInterface
 }
 
 // Cancel cancels the context with the provided error cause.
@@ -101,6 +118,14 @@ func WithOptions(options OptionsInterface) Option {
 func WithReports(reports ReportsInterface) Option {
 	return func(context *Context) error {
 		context.reports = reports
+		return nil
+	}
+}
+
+// WithEventManager sets the event manager for the context.
+func WithEventManager(eventManager EventManagerInterface) Option {
+	return func(context *Context) error {
+		context.eventManager = eventManager
 		return nil
 	}
 }

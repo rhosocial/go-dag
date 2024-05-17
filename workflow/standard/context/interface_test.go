@@ -61,11 +61,22 @@ func (o MockReports) AddTransit(transit string, key string, value any) error {
 	return nil
 }
 
+type MockEventManager struct {
+	EventManagerInterface
+}
+
+func (o MockEventManager) Listen(ctx context.Context) {
+
+}
+
 // Ensure MockIdentifier implements IdentifierInterface
 var _ IdentifierInterface = (*MockIdentifier)(nil)
 
 // Ensure MockOptions implements OptionsInterface
 var _ OptionsInterface = (*MockOptions)(nil)
+
+// Ensure MockEventManager implements EventManagerInterface
+var _ EventManagerInterface = (*MockEventManager)(nil)
 
 // Mock CancelCauseFunc
 func MockCancelCauseFunc(cause error) {}
@@ -102,12 +113,20 @@ func TestNewContext(t *testing.T) {
 	assert.NotNil(t, c4)
 	assert.Equal(t, mockReports, c4.reports)
 
+	// Test with WithEventManager option
+	mockEventManager := &MockEventManager{}
+	c5, err := NewContext(WithEventManager(mockEventManager))
+	assert.NoError(t, err)
+	assert.NotNil(t, c5)
+	assert.Equal(t, mockEventManager, c5.eventManager)
+
 	// Test with multiple options
 	c, err := NewContext(
 		WithContext(ctx, cancel),
 		WithIdentifier(mockIdentifier),
 		WithOptions(mockOptions),
 		WithReports(mockReports),
+		WithEventManager(mockEventManager),
 	)
 	assert.NoError(t, err)
 	assert.NotNil(t, c)
@@ -115,6 +134,7 @@ func TestNewContext(t *testing.T) {
 	assert.Equal(t, mockIdentifier, c.identifier)
 	assert.Equal(t, mockOptions, c.options)
 	assert.Equal(t, mockReports, c.reports)
+	assert.Equal(t, mockEventManager, c.eventManager)
 }
 
 // Test the Cancel method
