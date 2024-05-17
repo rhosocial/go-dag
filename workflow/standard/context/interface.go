@@ -123,6 +123,16 @@ func WithReports(reports ReportsInterface) Option {
 }
 
 // WithEventManager sets the event manager for the context.
+//
+// This option allows you to associate an EventManagerInterface instance with the context,
+// enabling event-driven communication and processing within the workflow. The event manager
+// is responsible for handling events sent by the workflow or transit workers and dispatching
+// them to the registered subscribers.
+//
+// Note: The context does not automatically start the event manager's listening functionality.
+// You must explicitly start the Listen() method on the event manager at the appropriate time
+// in your application. Failure to do so will result in the workflow and transit workers being
+// blocked when they attempt to send data to the event channel.
 func WithEventManager(eventManager EventManagerInterface) Option {
 	return func(context *Context) error {
 		context.eventManager = eventManager

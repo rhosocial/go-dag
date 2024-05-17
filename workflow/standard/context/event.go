@@ -1,3 +1,7 @@
+// Copyright (c) 2023 - 2024 vistart. All rights reserved.
+// Use of this source code is governed by Apache-2.0 license
+// that can be found in the LICENSE file.
+
 package context
 
 import "context"
@@ -11,23 +15,32 @@ type SubscriberInterface interface {
 	ReceiveEvent(event EventInterface)
 }
 
+// EventManagerInterface represents an interface for managing events.
 type EventManagerInterface interface {
+	// Listen listens for events and sends them to subscribers.
 	Listen(ctx context.Context)
 }
 
 // EventManager manages events and subscribers.
 type EventManager struct {
+	// eventChannel is a channel through which events are sent.
 	eventChannel chan EventInterface
-	subscribers  map[string]SubscriberInterface
+
+	// subscribers is a map of subscriber identifiers to subscriber instances.
+	subscribers map[string]SubscriberInterface
 }
 
 // NewEventManager creates a new EventManager instance.
 func NewEventManager(options ...EventManagerOption) (*EventManager, error) {
 	eventManager := &EventManager{
+		// Initialize eventChannel to handle EventInterface.
 		eventChannel: make(chan EventInterface),
-		subscribers:  make(map[string]SubscriberInterface),
+
+		// Initialize subscribers as an empty map.
+		subscribers: make(map[string]SubscriberInterface),
 	}
 	for _, option := range options {
+		// Apply each option to the event manager.
 		err := option(eventManager)
 		if err != nil {
 			return nil, err
@@ -36,6 +49,7 @@ func NewEventManager(options ...EventManagerOption) (*EventManager, error) {
 	return eventManager, nil
 }
 
+// EventManagerOption defines a type for configuring EventManager.
 type EventManagerOption func(*EventManager) error
 
 // WithSubscriber adds a subscriber to the event manager.
@@ -51,18 +65,22 @@ func (em *EventManager) Listen(ctx context.Context) {
 	for {
 		select {
 		case event := <-em.eventChannel:
+			// Dispatch event to all subscribers.
 			for _, subscriber := range em.subscribers {
 				if subscriber != nil {
+					// Call ReceiveEvent in a separate goroutine.
 					go subscriber.ReceiveEvent(event)
 				}
 			}
 		case <-ctx.Done():
+			// Exit the loop if the context is done.
 			return
 		default:
 		}
 	}
 }
 
+// KeyEventManagerChannel is the context key for the event manager channel.
 const KeyEventManagerChannel = "__go_dag_workflow_event_channel"
 
 // WorkerContextWithEventManager creates a new context with the provided event manager.
