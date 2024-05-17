@@ -6,8 +6,8 @@ A Go-based framework has been developed to oversee the execution of workflows de
 ![GitHub Tag](https://img.shields.io/github/v/tag/rhosocial/go-dag)
 ![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/rhosocial/go-dag)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rhosocial/go-dag)](https://goreportcard.com/report/github.com/rhosocial/go-dag)
-![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/rhosocial/go-dag/go.yml?branch=r1.0)
-[![Codecov coverage](https://codecov.io/gh/rhosocial/go-dag/branch/r1.0/graph/badge.svg)](https://app.codecov.io/gh/rhosocial/go-dag/tree/r1.0)
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/rhosocial/go-dag/go.yml?branch=r1.1)
+[![Codecov coverage](https://codecov.io/gh/rhosocial/go-dag/branch/r1.1/graph/badge.svg)](https://app.codecov.io/gh/rhosocial/go-dag/tree/r1.1)
 
 Unlike other DAG frameworks, `GO-DAG` does not prioritize concepts like edges and vertices.
 Instead, it enables users to concentrate on defining transits (workers along with their inputs and outputs). 

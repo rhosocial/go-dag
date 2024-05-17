@@ -60,7 +60,14 @@ func WithSubscriber(identifier string, subscriber SubscriberInterface) EventMana
 	}
 }
 
-// Listen sends an event to all subscribers.
+// Listen starts a goroutine to receive events sent by workflow and transit workers,
+// and dispatches them to all subscribers. This method needs to be asynchronously started
+// to avoid blocking, and should be initiated before executing the workflow. The parameter ctx
+// controls the context in which this goroutine stops, and it is not the same context as the one
+// used for executing the workflow. For instance, after one execution of the workflow finishes,
+// its context is destroyed, but you may need to retain the listening goroutine for a while longer
+// to ensure that all events are successfully dispatched. On the other hand, the event manager
+// can also be reused, and its context is related to the lifecycle of the event manager.
 func (em *EventManager) Listen(ctx context.Context) {
 	for {
 		select {
