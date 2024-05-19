@@ -69,9 +69,15 @@ type MockEventManager struct {
 	EventManagerInterface
 }
 
-func (o MockEventManager) Listen(ctx context.Context) {
+func (o MockEventManager) Listen(ctx context.Context) {}
 
+type MockContext struct {
+	Interface
 }
+
+func (m MockContext) Cancel(cause error) {}
+
+func (m MockContext) GetContext() context.Context { return nil }
 
 // Ensure MockIdentifier implements IdentifierInterface
 var _ IdentifierInterface = (*MockIdentifier)(nil)
@@ -81,6 +87,8 @@ var _ OptionsInterface = (*MockOptions)(nil)
 
 // Ensure MockEventManager implements EventManagerInterface
 var _ EventManagerInterface = (*MockEventManager)(nil)
+
+var _ Interface = (*MockContext)(nil)
 
 // Mock CancelCauseFunc
 func MockCancelCauseFunc(cause error) {}
@@ -135,6 +143,7 @@ func TestNewContext(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, c)
 	assert.Equal(t, ctx, c.context)
+	assert.Equal(t, ctx, c.GetContext())
 	assert.Equal(t, mockIdentifier, c.identifier)
 	assert.Equal(t, mockOptions, c.options)
 	assert.Equal(t, mockReports, c.reports)

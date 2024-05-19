@@ -11,7 +11,8 @@ import "context"
 // Interface defines the methods that a context implementation must satisfy.
 type Interface interface {
 	// Cancel cancels the context with the provided error cause.
-	Cancel()
+	Cancel(cause error)
+	GetContext() context.Context
 }
 
 // Context represents a context instance that encapsulates a context.Context and
@@ -73,6 +74,8 @@ type Context struct {
 func (c *Context) Cancel(cause error) {
 	c.cancel(cause)
 }
+
+func (c *Context) GetContext() context.Context { return c.context }
 
 // Option is a function type for defining context configuration options.
 type Option func(*Context) error

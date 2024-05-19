@@ -11,6 +11,16 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+type MockItem struct {
+	ItemInterface
+}
+
+func (m *MockItem) Expired() bool { return false }
+
+func (m *MockItem) Value() any { return nil }
+
+var _ ItemInterface = (*MockItem)(nil)
+
 func TestNewItem(t *testing.T) {
 	item := NewItem(int64(1))
 	assert.NotNil(t, item)
