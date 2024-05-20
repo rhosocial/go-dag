@@ -14,7 +14,7 @@ type HangingIncomingError struct {
 }
 
 func (e HangingIncomingError) Error() string {
-	return fmt.Sprintf("node %s has a hanging predecessor %s", e.name, e.predecessor)
+	return fmt.Sprintf("node %s has a hanging incoming node %s", e.name, e.predecessor)
 }
 
 // HangingOutgoingError represents an error where a node has a hanging outgoing node.
@@ -25,7 +25,7 @@ type HangingOutgoingError struct {
 }
 
 func (e HangingOutgoingError) Error() string {
-	return fmt.Sprintf("node %s has a hanging successor %s", e.name, e.successor)
+	return fmt.Sprintf("node %s has a hanging outgoing node %s", e.name, e.successor)
 }
 
 // DanglingIncomingError represents an error where a node has no defined incoming node(s).
@@ -35,7 +35,7 @@ type DanglingIncomingError struct {
 }
 
 func (e DanglingIncomingError) Error() string {
-	return fmt.Sprintf("node %s has no defined predecessor(s)", e.name)
+	return fmt.Sprintf("node %s has no defined incoming node(s)", e.name)
 }
 
 // DanglingOutgoingError represents an error where a node has no defined outgoing node(s).
@@ -45,7 +45,7 @@ type DanglingOutgoingError struct {
 }
 
 func (e DanglingOutgoingError) Error() string {
-	return fmt.Sprintf("node %s has no defined successor(s)", e.name)
+	return fmt.Sprintf("node %s has no defined outgoing node(s)", e.name)
 }
 
 // SourceDuplicatedError represents an error where a source node is duplicated.
