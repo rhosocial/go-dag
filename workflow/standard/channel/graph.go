@@ -9,32 +9,32 @@ import (
 	"strings"
 )
 
-// ErrCycle represents an error due to a cycle in the graph.
-type ErrCycle struct {
-	cycleNodes []string
+// CycleError represents an error due to a cycle in the graph.
+type CycleError struct {
+	nodes []string
 	error
 }
 
 // Error returns a formatted string describing the cycle.
-func (e *ErrCycle) Error() string {
-	return fmt.Sprintf("graph has a cycle: %s", strings.Join(e.cycleNodes, " -> "))
+func (e *CycleError) Error() string {
+	return fmt.Sprintf("graph has a cycle: %s", strings.Join(e.nodes, " -> "))
 }
 
-// NewErrCycle creates a new ErrCycle with the given cycle nodes.
-func NewErrCycle(cycleNodes ...string) *ErrCycle {
-	return &ErrCycle{cycleNodes: cycleNodes}
+// NewCycleError creates a new CycleError with the given cycle nodes.
+func NewCycleError(nodes ...string) *CycleError {
+	return &CycleError{nodes: nodes}
 }
 
-// reverse reverses a slice of any type.
-func reverse[T any](s []T) []T {
+// ReverseSlice reverses a slice of any type.
+func ReverseSlice[T any](s []T) []T {
 	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
 		s[i], s[j] = s[j], s[i]
 	}
 	return s
 }
 
-// GraphInterface is an interface for graph operations.
-type GraphInterface interface {
+// DAG is an interface for graph operations.
+type DAG interface {
 	GetSourceName() string
 	GetSinkName() string
 	HasCycle() error
@@ -42,33 +42,36 @@ type GraphInterface interface {
 
 // Node represents a node in the graph.
 type Node struct {
-	Name         string
-	Predecessors []string
-	Successors   []string
+	Name     string
+	Incoming []string
+	Outgoing []string
 }
 
-func NewNode(name string, predecessors []string, successors []string) *Node {
+// NewNode creates a new Node with the given name, incoming, and outgoing edges.
+func NewNode(name string, incoming []string, outgoing []string) *Node {
 	return &Node{
-		Name:         name,
-		Predecessors: predecessors,
-		Successors:   successors,
+		Name:     name,
+		Incoming: incoming,
+		Outgoing: outgoing,
 	}
 }
 
 // Graph represents the DAG
 type Graph struct {
-	Nodes      map[string]Node
-	SourceName string
-	SinkName   string
-	GraphInterface
+	NodesMap map[string]Node
+	Source   string
+	Sink     string
+	DAG
 }
 
+// GetSourceName returns the source node name.
 func (g *Graph) GetSourceName() string {
-	return g.SourceName
+	return g.Source
 }
 
+// GetSinkName returns the sink node name.
 func (g *Graph) GetSinkName() string {
-	return g.SinkName
+	return g.Sink
 }
 
 // HasCycle checks if the graph contains a cycle and returns detailed cycle information.
@@ -89,7 +92,7 @@ func (g *Graph) HasCycle() error {
 		visited[nodeName] = true
 		recStack[nodeName] = true
 
-		for _, successor := range g.Nodes[nodeName].Successors {
+		for _, successor := range g.NodesMap[nodeName].Outgoing {
 			if dfs(successor) {
 				cycleNodes = append(cycleNodes, nodeName)
 				return true
@@ -99,10 +102,10 @@ func (g *Graph) HasCycle() error {
 		return false
 	}
 
-	for nodeName := range g.Nodes {
+	for nodeName := range g.NodesMap {
 		if !visited[nodeName] {
 			if dfs(nodeName) {
-				return NewErrCycle(reverse(cycleNodes)...)
+				return NewCycleError(ReverseSlice(cycleNodes)...)
 			}
 		}
 	}
@@ -110,75 +113,17 @@ func (g *Graph) HasCycle() error {
 	return nil
 }
 
-type ErrHangingNodePredecessor struct {
-	name        string
-	predecessor string
-	error
-}
-
-func (e ErrHangingNodePredecessor) Error() string {
-	return fmt.Sprintf("node %s has a hanging predecessor %s", e.name, e.predecessor)
-}
-
-type ErrHangingNodeSuccessor struct {
-	name      string
-	successor string
-	error
-}
-
-func (e ErrHangingNodeSuccessor) Error() string {
-	return fmt.Sprintf("node %s has a hanging successor %s", e.name, e.successor)
-}
-
-type ErrDanglingNodePredecessor struct {
-	name string
-	error
-}
-
-func (e ErrDanglingNodePredecessor) Error() string {
-	return fmt.Sprintf("node %s has no defined predecessor(s)", e.name)
-}
-
-type ErrDanglingNodeSuccessor struct {
-	name string
-	error
-}
-
-func (e ErrDanglingNodeSuccessor) Error() string {
-	return fmt.Sprintf("node %s has no defined successor(s)", e.name)
-}
-
-type ErrSourceDuplicated struct {
-	name   string
-	source string
-	error
-}
-
-func (e ErrSourceDuplicated) Error() string {
-	return fmt.Sprintf("node %s cannot be source as the source %s already exists", e.name, e.source)
-}
-
-type ErrSinkDuplicated struct {
-	name string
-	sink string
-	error
-}
-
-func (e ErrSinkDuplicated) Error() string {
-	return fmt.Sprintf("node %s cannot be sink as the sink %s already exists", e.name, e.sink)
-}
-
 // NewGraph initializes a new Graph.
 func NewGraph(sourceName, sinkName string, nodes []*Node) (*Graph, error) {
 	graph := &Graph{
-		Nodes:      make(map[string]Node),
-		SourceName: sourceName,
-		SinkName:   sinkName,
+		NodesMap: make(map[string]Node),
+		Source:   sourceName,
+		Sink:     sinkName,
 	}
 
 	// Add nodes to the graph
 	for _, node := range nodes {
-		graph.Nodes[node.Name] = *node
+		graph.NodesMap[node.Name] = *node
 	}
 
 	// Check for hanging predecessors and successors.
@@ -186,14 +131,14 @@ func NewGraph(sourceName, sinkName string, nodes []*Node) (*Graph, error) {
 		if node.Name == sourceName || node.Name == sinkName {
 			continue
 		}
-		for _, pred := range node.Predecessors {
-			if _, exists := graph.Nodes[pred]; !exists {
-				return nil, ErrHangingNodePredecessor{predecessor: pred, name: node.Name}
+		for _, pred := range node.Incoming {
+			if _, exists := graph.NodesMap[pred]; !exists {
+				return nil, HangingIncomingError{predecessor: pred, name: node.Name}
 			}
 		}
-		for _, successor := range node.Successors {
-			if _, exists := graph.Nodes[successor]; !exists {
-				return nil, ErrHangingNodeSuccessor{successor: successor, name: node.Name}
+		for _, successor := range node.Outgoing {
+			if _, exists := graph.NodesMap[successor]; !exists {
+				return nil, HangingOutgoingError{successor: successor, name: node.Name}
 			}
 		}
 	}
@@ -202,22 +147,22 @@ func NewGraph(sourceName, sinkName string, nodes []*Node) (*Graph, error) {
 	var visitedSink *Node
 
 	for _, node := range nodes {
-		if node.Name == sourceName && len(node.Predecessors) == 0 {
+		if node.Name == sourceName && len(node.Incoming) == 0 {
 			if visitedSource == nil {
 				visitedSource = node
 			} else {
-				return nil, ErrSourceDuplicated{source: visitedSource.Name, name: node.Name}
+				return nil, SourceDuplicatedError{source: visitedSource.Name, name: node.Name}
 			}
-		} else if node.Name == sinkName && len(node.Successors) == 0 {
+		} else if node.Name == sinkName && len(node.Outgoing) == 0 {
 			if visitedSink == nil {
 				visitedSink = node
 			} else {
-				return nil, ErrSinkDuplicated{sink: visitedSink.Name, name: node.Name}
+				return nil, SinkDuplicatedError{sink: visitedSink.Name, name: node.Name}
 			}
-		} else if len(node.Predecessors) == 0 {
-			return nil, ErrDanglingNodePredecessor{name: node.Name}
-		} else if len(node.Successors) == 0 {
-			return nil, ErrDanglingNodeSuccessor{name: node.Name}
+		} else if len(node.Incoming) == 0 {
+			return nil, DanglingIncomingError{name: node.Name}
+		} else if len(node.Outgoing) == 0 {
+			return nil, DanglingOutgoingError{name: node.Name}
 		}
 	}
 

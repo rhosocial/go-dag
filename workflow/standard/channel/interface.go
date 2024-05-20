@@ -8,7 +8,7 @@ package channel
 // Interface defines the methods that need to be implemented for graph operations.
 type Interface interface {
 	ClearGraph()
-	GetGraph() (GraphInterface, error)
+	GetGraph() (DAG, error)
 	GetChannelInput() string
 	GetChannelOutput() string
 	AppendNodes(...*Node)
@@ -16,10 +16,10 @@ type Interface interface {
 
 // Channels contains the graph input, output, nodes, and the graph object.
 type Channels struct {
-	channelInput  string         // The name of the start node.
-	channelOutput string         // The name of the end node.
-	nodes         []*Node        // A list of nodes.
-	graph         GraphInterface // The implementation of the GraphInterface.
+	channelInput  string  // The name of the start node.
+	channelOutput string  // The name of the end node.
+	nodes         []*Node // A list of nodes.
+	graph         DAG     // The implementation of the GraphInterface.
 	Interface
 }
 
@@ -29,7 +29,7 @@ func (c *Channels) ClearGraph() {
 }
 
 // GetGraph returns the graph object, creating it if necessary.
-func (c *Channels) GetGraph() (GraphInterface, error) {
+func (c *Channels) GetGraph() (DAG, error) {
 	if c.graph == nil {
 		graph, err := NewGraph(c.channelInput, c.channelOutput, c.nodes)
 		if err != nil {

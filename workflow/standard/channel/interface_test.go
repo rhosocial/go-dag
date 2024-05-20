@@ -15,7 +15,7 @@ type MockChannels struct {
 	Interface
 }
 
-func (m *MockChannels) GetGraph() (GraphInterface, error) {
+func (m *MockChannels) GetGraph() (DAG, error) {
 	return nil, nil
 }
 
@@ -40,10 +40,10 @@ func TestNewChannels(t *testing.T) {
 			options: []Option{
 				WithDefaultChannels(),
 				WithNodes(
-					&Node{Name: DefaultChannelInput, Successors: []string{"A"}},
-					&Node{Name: "A", Predecessors: []string{DefaultChannelInput}, Successors: []string{"B"}},
-					&Node{Name: "B", Predecessors: []string{"A"}, Successors: []string{DefaultChannelOutput}},
-					&Node{Name: DefaultChannelOutput, Predecessors: []string{"B"}},
+					&Node{Name: DefaultChannelInput, Outgoing: []string{"A"}},
+					&Node{Name: "A", Incoming: []string{DefaultChannelInput}, Outgoing: []string{"B"}},
+					&Node{Name: "B", Incoming: []string{"A"}, Outgoing: []string{DefaultChannelOutput}},
+					&Node{Name: DefaultChannelOutput, Incoming: []string{"B"}},
 				),
 			},
 			expectErr: false,
@@ -54,10 +54,10 @@ func TestNewChannels(t *testing.T) {
 				WithChannelInput("start"),
 				WithChannelOutput("end"),
 				WithNodes(
-					&Node{Name: "start", Successors: []string{"A"}},
-					&Node{Name: "A", Predecessors: []string{"start"}, Successors: []string{"B"}},
-					&Node{Name: "B", Predecessors: []string{"A"}, Successors: []string{"end"}},
-					&Node{Name: "end", Predecessors: []string{"B"}},
+					&Node{Name: "start", Outgoing: []string{"A"}},
+					&Node{Name: "A", Incoming: []string{"start"}, Outgoing: []string{"B"}},
+					&Node{Name: "B", Incoming: []string{"A"}, Outgoing: []string{"end"}},
+					&Node{Name: "end", Incoming: []string{"B"}},
 				),
 			},
 			expectErr: false,
@@ -67,11 +67,11 @@ func TestNewChannels(t *testing.T) {
 			options: []Option{
 				WithDefaultChannels(),
 				WithNodes(
-					&Node{Name: DefaultChannelInput, Successors: []string{"A"}},
-					&Node{Name: "A", Predecessors: []string{DefaultChannelInput}, Successors: []string{"B"}},
-					&Node{Name: "B", Predecessors: []string{"A"}, Successors: []string{"C"}},
-					&Node{Name: "C", Predecessors: []string{"B"}, Successors: []string{"A"}}, // Cycle here
-					&Node{Name: DefaultChannelOutput, Predecessors: []string{"C"}},
+					&Node{Name: DefaultChannelInput, Outgoing: []string{"A"}},
+					&Node{Name: "A", Incoming: []string{DefaultChannelInput}, Outgoing: []string{"B"}},
+					&Node{Name: "B", Incoming: []string{"A"}, Outgoing: []string{"C"}},
+					&Node{Name: "C", Incoming: []string{"B"}, Outgoing: []string{"A"}}, // Cycle here
+					&Node{Name: DefaultChannelOutput, Incoming: []string{"C"}},
 				),
 			},
 			expectErr: true,
@@ -81,11 +81,11 @@ func TestNewChannels(t *testing.T) {
 			options: []Option{
 				WithDefaultChannels(),
 				WithNodes(
-					&Node{Name: DefaultChannelInput, Successors: []string{"A"}},
-					&Node{Name: "A", Predecessors: []string{DefaultChannelInput}, Successors: []string{"B"}},
-					&Node{Name: "B", Predecessors: []string{"A"}, Successors: []string{"output"}},
-					&Node{Name: "C", Predecessors: []string{"D"}, Successors: []string{}}, // D does not exist
-					&Node{Name: DefaultChannelOutput, Predecessors: []string{"C"}},
+					&Node{Name: DefaultChannelInput, Outgoing: []string{"A"}},
+					&Node{Name: "A", Incoming: []string{DefaultChannelInput}, Outgoing: []string{"B"}},
+					&Node{Name: "B", Incoming: []string{"A"}, Outgoing: []string{"output"}},
+					&Node{Name: "C", Incoming: []string{"D"}, Outgoing: []string{}}, // D does not exist
+					&Node{Name: DefaultChannelOutput, Incoming: []string{"C"}},
 				),
 			},
 			expectErr: true,
@@ -107,10 +107,10 @@ func TestChannels_GetGraph(t *testing.T) {
 	channels, err := NewChannels(
 		WithDefaultChannels(),
 		WithNodes(
-			&Node{Name: DefaultChannelInput, Successors: []string{"A"}},
-			&Node{Name: "A", Predecessors: []string{DefaultChannelInput}, Successors: []string{"B"}},
-			&Node{Name: "B", Predecessors: []string{"A"}, Successors: []string{DefaultChannelOutput}},
-			&Node{Name: DefaultChannelOutput, Predecessors: []string{"B"}},
+			&Node{Name: DefaultChannelInput, Outgoing: []string{"A"}},
+			&Node{Name: "A", Incoming: []string{DefaultChannelInput}, Outgoing: []string{"B"}},
+			&Node{Name: "B", Incoming: []string{"A"}, Outgoing: []string{DefaultChannelOutput}},
+			&Node{Name: DefaultChannelOutput, Incoming: []string{"B"}},
 		),
 	)
 	if err != nil {
@@ -137,9 +137,9 @@ func TestChannels_ClearGraph(t *testing.T) {
 		WithDefaultChannels(),
 		WithNodes(
 			NewNode(DefaultChannelInput, nil, []string{"A"}),
-			&Node{Name: "A", Predecessors: []string{DefaultChannelInput}, Successors: []string{"B"}},
-			&Node{Name: "B", Predecessors: []string{"A"}, Successors: []string{DefaultChannelOutput}},
-			&Node{Name: DefaultChannelOutput, Predecessors: []string{"B"}},
+			&Node{Name: "A", Incoming: []string{DefaultChannelInput}, Outgoing: []string{"B"}},
+			&Node{Name: "B", Incoming: []string{"A"}, Outgoing: []string{DefaultChannelOutput}},
+			&Node{Name: DefaultChannelOutput, Incoming: []string{"B"}},
 		),
 	)
 	if err != nil {
