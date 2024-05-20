@@ -25,6 +25,8 @@ func (m MockGraph) GetSinkName() string {
 
 func (m MockGraph) HasCycle() error { return nil }
 
+func (m MockGraph) TopologicalSort() ([][]string, error) { return nil, nil }
+
 var _ DAG = (*MockGraph)(nil)
 
 func TestNewGraph(t *testing.T) {
@@ -177,6 +179,7 @@ func TestHasCycle(t *testing.T) {
 		})
 	}
 }
+
 func TestNewGraphWithExamples(t *testing.T) {
 	t.Run("Example 1: Simple DAG without cycles or dangling nodes", func(t *testing.T) {
 		// Example 1: Simple DAG without cycles or dangling nodes
@@ -307,5 +310,94 @@ func TestNewGraphWithExamples(t *testing.T) {
 			t.Fatalf("Error creating graph from nodes8: %v", err8)
 		}
 		t.Log("Graph created successfully from nodes8:", graph8)
+	})
+}
+
+func TestGraph_TopologicalSort(t *testing.T) {
+	t.Run("Simple DAG", func(t *testing.T) {
+		nodes := []*Node{
+			NewNode("A", []string{}, []string{"B"}),
+			NewNode("B", []string{"A"}, []string{"C"}),
+			NewNode("C", []string{"B"}, []string{}),
+		}
+
+		graph, err := NewGraph("A", "C", nodes)
+		assert.NoError(t, err)
+		assert.NotNil(t, graph)
+
+		sorts, err := graph.TopologicalSort()
+		assert.NoError(t, err)
+		assert.Equal(t, [][]string{
+			{"A", "B", "C"},
+		}, sorts)
+	})
+
+	t.Run("DAG with Multiple Branches", func(t *testing.T) {
+		nodes := []*Node{
+			NewNode("A", []string{}, []string{"B", "C"}),
+			NewNode("B", []string{"A"}, []string{"D"}),
+			NewNode("C", []string{"A"}, []string{"D"}),
+			NewNode("D", []string{"B", "C"}, []string{}),
+		}
+
+		graph, err := NewGraph("A", "D", nodes)
+		assert.NoError(t, err)
+		assert.NotNil(t, graph)
+
+		sorts, err := graph.TopologicalSort()
+		assert.NoError(t, err)
+		assert.ElementsMatch(t, [][]string{
+			{"A", "B", "C", "D"},
+			{"A", "C", "B", "D"},
+		}, sorts)
+	})
+
+	t.Run("Single Node DAG", func(t *testing.T) {
+		nodes := []*Node{
+			NewNode("A", []string{}, []string{}),
+		}
+
+		graph, err := NewGraph("A", "A", nodes)
+		assert.NoError(t, err)
+		assert.NotNil(t, graph)
+
+		sorts, err := graph.TopologicalSort()
+		assert.NoError(t, err)
+		assert.Equal(t, [][]string{
+			{"A"},
+		}, sorts)
+	})
+
+	t.Run("DAG with Cycle", func(t *testing.T) {
+		nodes := []*Node{
+			NewNode("A", []string{}, []string{"B"}),
+			NewNode("B", []string{"A"}, []string{"C"}),
+			NewNode("C", []string{"B"}, []string{"A"}), // Cycle here
+		}
+
+		graph := &Graph{
+			NodesMap: make(map[string]Node),
+			Source:   "A",
+			Sink:     "C",
+		}
+
+		// Add nodes to the graph
+		for _, node := range nodes {
+			graph.NodesMap[node.Name] = *node
+		}
+		_, err := graph.TopologicalSort()
+		assert.Error(t, err)
+	})
+
+	t.Run("Empty Graph", func(t *testing.T) {
+		var nodes []*Node
+
+		graph, err := NewGraph("", "", nodes)
+		assert.NoError(t, err)
+		assert.NotNil(t, graph)
+
+		sorts, err := graph.TopologicalSort()
+		assert.NoError(t, err)
+		assert.Equal(t, [][]string{[]string{}}, sorts) // Expecting an empty slice of slices
 	})
 }

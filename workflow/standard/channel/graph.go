@@ -38,6 +38,7 @@ type DAG interface {
 	GetSourceName() string
 	GetSinkName() string
 	HasCycle() error
+	TopologicalSort() ([][]string, error)
 }
 
 // Node represents a node in the graph.
@@ -111,6 +112,68 @@ func (g *Graph) HasCycle() error {
 	}
 
 	return nil
+}
+
+// TopologicalSort returns all possible topological sorts of the DAG.
+func (g *Graph) TopologicalSort() ([][]string, error) {
+	// Check for cycle first
+	if err := g.HasCycle(); err != nil {
+		return nil, err
+	}
+
+	// Helper function to perform all topological sorts
+	var allTopologicalSorts func(visited map[string]bool, inDegree map[string]int, stack []string) [][]string
+	allTopologicalSorts = func(visited map[string]bool, inDegree map[string]int, stack []string) [][]string {
+		var result [][]string
+		flag := false
+
+		for node, deg := range inDegree {
+			if deg == 0 && !visited[node] {
+				for _, successor := range g.NodesMap[node].Outgoing {
+					inDegree[successor]--
+				}
+
+				// Add node to stack and mark as visited
+				stack = append(stack, node)
+				visited[node] = true
+				subResults := allTopologicalSorts(visited, inDegree, stack)
+
+				// Collect results from recursive call
+				for _, subResult := range subResults {
+					result = append(result, subResult)
+				}
+
+				// Reset visited status and in-degree for backtracking
+				visited[node] = false
+				stack = stack[:len(stack)-1]
+				for _, successor := range g.NodesMap[node].Outgoing {
+					inDegree[successor]++
+				}
+
+				flag = true
+			}
+		}
+
+		// If flag is false, it means all nodes are processed
+		if !flag {
+			temp := make([]string, len(stack))
+			copy(temp, stack)
+			result = append(result, temp)
+		}
+
+		return result
+	}
+
+	// Initialize visited map and in-degree map
+	visited := make(map[string]bool)
+	inDegree := make(map[string]int)
+
+	for node := range g.NodesMap {
+		inDegree[node] = len(g.NodesMap[node].Incoming)
+	}
+
+	// Perform all topological sorts
+	return allTopologicalSorts(visited, inDegree, []string{}), nil
 }
 
 // NewGraph initializes a new Graph.
