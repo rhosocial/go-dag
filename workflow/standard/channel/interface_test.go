@@ -11,6 +11,24 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+type MockChannels struct {
+	Interface
+}
+
+func (m *MockChannels) GetGraph() (GraphInterface, error) {
+	return nil, nil
+}
+
+func (m *MockChannels) ClearGraph() {}
+
+func (m *MockChannels) GetChannelInput() string { return "" }
+
+func (m *MockChannels) GetChannelOutput() string { return "" }
+
+func (m *MockChannels) AppendNodes(...*Node) {}
+
+var _ Interface = (*MockChannels)(nil)
+
 func TestNewChannels(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -150,4 +168,11 @@ func TestChannelsWithOptionError(t *testing.T) {
 	channels, err := NewChannels(WithOptionError())
 	assert.Nil(t, channels)
 	assert.Error(t, err)
+}
+
+func TestChannelsGetChannelInputOutput(t *testing.T) {
+	channels, err := NewChannels(WithDefaultChannels())
+	assert.NoError(t, err)
+	assert.Equal(t, DefaultChannelInput, channels.GetChannelInput())
+	assert.Equal(t, DefaultChannelOutput, channels.GetChannelOutput())
 }

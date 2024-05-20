@@ -9,6 +9,9 @@ package channel
 type Interface interface {
 	ClearGraph()
 	GetGraph() (GraphInterface, error)
+	GetChannelInput() string
+	GetChannelOutput() string
+	AppendNodes(...*Node)
 }
 
 // Channels contains the graph input, output, nodes, and the graph object.
@@ -35,6 +38,18 @@ func (c *Channels) GetGraph() (GraphInterface, error) {
 		c.graph = graph
 	}
 	return c.graph, nil
+}
+
+func (c *Channels) GetChannelInput() string {
+	return c.channelInput
+}
+
+func (c *Channels) GetChannelOutput() string {
+	return c.channelOutput
+}
+
+func (c *Channels) AppendNodes(nodes ...*Node) {
+	c.nodes = append(c.nodes, nodes...)
 }
 
 // Option defines a function type for configuring the Channels struct.
@@ -85,9 +100,7 @@ func WithDefaultChannels() Option {
 // WithNodes sets the list of nodes option.
 func WithNodes(nodes ...*Node) Option {
 	return func(channels *Channels) error {
-		for _, node := range nodes {
-			channels.nodes = append(channels.nodes, node)
-		}
+		channels.AppendNodes(nodes...)
 		return nil
 	}
 }

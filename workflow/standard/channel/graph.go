@@ -35,8 +35,8 @@ func reverse[T any](s []T) []T {
 
 // GraphInterface is an interface for graph operations.
 type GraphInterface interface {
-	GetStartNodeName() string
-	GetEndNodeName() string
+	GetSourceName() string
+	GetSinkName() string
 	HasCycle() error
 }
 
@@ -57,18 +57,18 @@ func NewNode(name string, predecessors []string, successors []string) *Node {
 
 // Graph represents the DAG
 type Graph struct {
-	Nodes         map[string]Node
-	StartNodeName string
-	EndNodeName   string
+	Nodes      map[string]Node
+	SourceName string
+	SinkName   string
 	GraphInterface
 }
 
-func (g *Graph) GetStartNodeName() string {
-	return g.StartNodeName
+func (g *Graph) GetSourceName() string {
+	return g.SourceName
 }
 
-func (g *Graph) GetEndNodeName() string {
-	return g.EndNodeName
+func (g *Graph) GetSinkName() string {
+	return g.SinkName
 }
 
 // HasCycle checks if the graph contains a cycle and returns detailed cycle information.
@@ -110,12 +110,70 @@ func (g *Graph) HasCycle() error {
 	return nil
 }
 
+type ErrHangingNodePredecessor struct {
+	name        string
+	predecessor string
+	error
+}
+
+func (e ErrHangingNodePredecessor) Error() string {
+	return fmt.Sprintf("node %s has a hanging predecessor %s", e.name, e.predecessor)
+}
+
+type ErrHangingNodeSuccessor struct {
+	name      string
+	successor string
+	error
+}
+
+func (e ErrHangingNodeSuccessor) Error() string {
+	return fmt.Sprintf("node %s has a hanging successor %s", e.name, e.successor)
+}
+
+type ErrDanglingNodePredecessor struct {
+	name string
+	error
+}
+
+func (e ErrDanglingNodePredecessor) Error() string {
+	return fmt.Sprintf("node %s has no defined predecessor(s)", e.name)
+}
+
+type ErrDanglingNodeSuccessor struct {
+	name string
+	error
+}
+
+func (e ErrDanglingNodeSuccessor) Error() string {
+	return fmt.Sprintf("node %s has no defined successor(s)", e.name)
+}
+
+type ErrSourceDuplicated struct {
+	name   string
+	source string
+	error
+}
+
+func (e ErrSourceDuplicated) Error() string {
+	return fmt.Sprintf("node %s cannot be source as the source %s already exists", e.name, e.source)
+}
+
+type ErrSinkDuplicated struct {
+	name string
+	sink string
+	error
+}
+
+func (e ErrSinkDuplicated) Error() string {
+	return fmt.Sprintf("node %s cannot be sink as the sink %s already exists", e.name, e.sink)
+}
+
 // NewGraph initializes a new Graph.
-func NewGraph(startNodeName, endNodeName string, nodes []*Node) (*Graph, error) {
+func NewGraph(sourceName, sinkName string, nodes []*Node) (*Graph, error) {
 	graph := &Graph{
-		Nodes:         make(map[string]Node),
-		StartNodeName: startNodeName,
-		EndNodeName:   endNodeName,
+		Nodes:      make(map[string]Node),
+		SourceName: sourceName,
+		SinkName:   sinkName,
 	}
 
 	// Add nodes to the graph
@@ -125,18 +183,41 @@ func NewGraph(startNodeName, endNodeName string, nodes []*Node) (*Graph, error) 
 
 	// Check for hanging predecessors and successors.
 	for _, node := range nodes {
-		if node.Name == startNodeName || node.Name == endNodeName {
+		if node.Name == sourceName || node.Name == sinkName {
 			continue
 		}
 		for _, pred := range node.Predecessors {
 			if _, exists := graph.Nodes[pred]; !exists {
-				return nil, fmt.Errorf("node %s has a hanging predecessor %s", node.Name, pred)
+				return nil, ErrHangingNodePredecessor{predecessor: pred, name: node.Name}
 			}
 		}
-		for _, succeed := range node.Successors {
-			if _, exists := graph.Nodes[succeed]; !exists {
-				return nil, fmt.Errorf("node %s has a hanging successor %s", node.Name, succeed)
+		for _, successor := range node.Successors {
+			if _, exists := graph.Nodes[successor]; !exists {
+				return nil, ErrHangingNodeSuccessor{successor: successor, name: node.Name}
 			}
+		}
+	}
+
+	var visitedSource *Node
+	var visitedSink *Node
+
+	for _, node := range nodes {
+		if node.Name == sourceName && len(node.Predecessors) == 0 {
+			if visitedSource == nil {
+				visitedSource = node
+			} else {
+				return nil, ErrSourceDuplicated{source: visitedSource.Name, name: node.Name}
+			}
+		} else if node.Name == sinkName && len(node.Successors) == 0 {
+			if visitedSink == nil {
+				visitedSink = node
+			} else {
+				return nil, ErrSinkDuplicated{sink: visitedSink.Name, name: node.Name}
+			}
+		} else if len(node.Predecessors) == 0 {
+			return nil, ErrDanglingNodePredecessor{name: node.Name}
+		} else if len(node.Successors) == 0 {
+			return nil, ErrDanglingNodeSuccessor{name: node.Name}
 		}
 	}
 

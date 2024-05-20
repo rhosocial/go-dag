@@ -15,11 +15,11 @@ type MockGraph struct {
 	GraphInterface
 }
 
-func (m MockGraph) GetStartNodeName() string {
+func (m MockGraph) GetSourceName() string {
 	return ""
 }
 
-func (m MockGraph) GetEndNodeName() string {
+func (m MockGraph) GetSinkName() string {
 	return ""
 }
 
@@ -97,14 +97,27 @@ func TestNewGraph(t *testing.T) {
 			},
 			expectErr: false,
 		},
+		{
+			name:  "Bad Case 1",
+			start: "input",
+			end:   "output",
+			nodes: []*Node{
+				{Name: "B", Predecessors: []string{"A"}},
+				{Name: "C", Successors: []string{"output"}},
+				{Name: "output", Predecessors: []string{"C"}},
+				{Name: "input", Successors: []string{"A"}},
+				{Name: "A", Predecessors: []string{"input"}, Successors: []string{"B"}},
+			},
+			expectErr: true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			graph, err := NewGraph(tt.start, tt.end, tt.nodes)
 			if err == nil {
-				assert.Equal(t, tt.start, graph.GetStartNodeName())
-				assert.Equal(t, tt.end, graph.GetEndNodeName())
+				assert.Equal(t, tt.start, graph.GetSourceName())
+				assert.Equal(t, tt.end, graph.GetSinkName())
 			}
 			if (err != nil) != tt.expectErr {
 				t.Errorf("NewGraph() error = %v, expectErr %v", err, tt.expectErr)
@@ -131,8 +144,8 @@ func TestHasCycle(t *testing.T) {
 					"C":      {Name: "C", Predecessors: []string{"B"}, Successors: []string{"output"}},
 					"output": {Name: "output", Predecessors: []string{"C"}},
 				},
-				StartNodeName: "input",
-				EndNodeName:   "output",
+				SourceName: "input",
+				SinkName:   "output",
 			},
 			expectErr: false,
 		},
@@ -146,8 +159,8 @@ func TestHasCycle(t *testing.T) {
 					"C":      {Name: "C", Predecessors: []string{"B"}, Successors: []string{"A"}},
 					"output": {Name: "output", Predecessors: []string{"C"}},
 				},
-				StartNodeName: "input",
-				EndNodeName:   "output",
+				SourceName: "input",
+				SinkName:   "output",
 			},
 			expectErr: true,
 		},
