@@ -5,102 +5,65 @@
 // Package channel helps the workflow manage the transit channel.
 package channel
 
-// Interface defines the methods that need to be implemented for graph operations.
-type Interface interface {
-	ClearGraph()
-	GetGraph() (DAG, error)
-	GetChannelInput() string
-	GetChannelOutput() string
-	AppendNodes(...*Node)
+// Transit represents a transit entity with name, listening channels, and sending channels.
+type Transit struct {
+	Name              string
+	ListeningChannels []string
+	SendingChannels   []string
 }
 
-// Channels contains the graph input, output, nodes, and the graph object.
-type Channels struct {
-	channelInput  string  // The name of the start node.
-	channelOutput string  // The name of the end node.
-	nodes         []*Node // A list of nodes.
-	graph         DAG     // The implementation of the GraphInterface.
-	Interface
-}
-
-// ClearGraph clears the current graph object.
-func (c *Channels) ClearGraph() {
-	c.graph = nil
-}
-
-// GetGraph returns the graph object, creating it if necessary.
-func (c *Channels) GetGraph() (DAG, error) {
-	if c.graph == nil {
-		graph, err := NewGraph(c.channelInput, c.channelOutput, c.nodes)
-		if err != nil {
-			return nil, err
-		}
-		c.graph = graph
+// NewTransit creates a new Transit with the given name, listening channels, and sending channels.
+func NewTransit(name string, listeningChannels, sendingChannels []string) *Transit {
+	return &Transit{
+		Name:              name,
+		ListeningChannels: listeningChannels,
+		SendingChannels:   sendingChannels,
 	}
-	return c.graph, nil
 }
 
-func (c *Channels) GetChannelInput() string {
-	return c.channelInput
-}
+// BuildGraphFromTransits constructs a Graph from a list of Transits.
+func BuildGraphFromTransits(transits []*Transit, sourceName, sinkName string) (*Graph, error) {
+	transitMap := make(map[string]*Transit)
+	nodeMap := make(map[string]*Node)
 
-func (c *Channels) GetChannelOutput() string {
-	return c.channelOutput
-}
+	// Create a map of Transit for easy lookup.
+	for _, transit := range transits {
+		transitMap[transit.Name] = transit
+	}
 
-func (c *Channels) AppendNodes(nodes ...*Node) {
-	c.nodes = append(c.nodes, nodes...)
-}
+	// Initialize nodes from transits
+	for _, transit := range transits {
+		nodeMap[transit.Name] = NewNode(transit.Name, []string{}, []string{})
+	}
 
-// Option defines a function type for configuring the Channels struct.
-type Option func(*Channels) error
-
-// NewChannels creates a new Channels instance and apply configuration options.
-func NewChannels(options ...Option) (*Channels, error) {
-	channels := &Channels{}
-	for _, option := range options {
-		err := option(channels)
-		if err != nil {
-			return nil, err
+	// Create edges based on listening and sending channels
+	for _, transit := range transits {
+		for _, listeningChannel := range transit.ListeningChannels {
+			for _, t := range transits {
+				if t.Name != transit.Name && contains(t.SendingChannels, listeningChannel) {
+					nodeMap[transit.Name].Incoming = append(nodeMap[transit.Name].Incoming, t.Name)
+					nodeMap[t.Name].Outgoing = append(nodeMap[t.Name].Outgoing, transit.Name)
+				}
+			}
 		}
 	}
-	return channels, nil
+
+	// Convert nodeMap to slice
+	var nodes []*Node
+	for _, node := range nodeMap {
+		nodes = append(nodes, node)
+	}
+
+	// Create the graph
+	return NewGraph(sourceName, sinkName, nodes)
 }
 
-// WithChannelInput sets the start node name option.
-func WithChannelInput(name string) Option {
-	return func(channels *Channels) error {
-		channels.channelInput = name
-		return nil
+// Utility function to check if a slice contains a string
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
 	}
-}
-
-// WithChannelOutput sets the end node name option.
-func WithChannelOutput(name string) Option {
-	return func(channels *Channels) error {
-		channels.channelOutput = name
-		return nil
-	}
-}
-
-const (
-	DefaultChannelInput  = "input"  // Constant for the default start node name.
-	DefaultChannelOutput = "output" // Constant for the default end node name.
-)
-
-// WithDefaultChannels sets the default start and end node names.
-func WithDefaultChannels() Option {
-	return func(channels *Channels) error {
-		WithChannelInput(DefaultChannelInput)(channels)
-		WithChannelOutput(DefaultChannelOutput)(channels)
-		return nil
-	}
-}
-
-// WithNodes sets the list of nodes option.
-func WithNodes(nodes ...*Node) Option {
-	return func(channels *Channels) error {
-		channels.AppendNodes(nodes...)
-		return nil
-	}
+	return false
 }

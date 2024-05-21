@@ -7,172 +7,126 @@ package channel
 import (
 	"errors"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
-type MockChannels struct {
-	Interface
-}
-
-func (m *MockChannels) GetGraph() (DAG, error) {
-	return nil, nil
-}
-
-func (m *MockChannels) ClearGraph() {}
-
-func (m *MockChannels) GetChannelInput() string { return "" }
-
-func (m *MockChannels) GetChannelOutput() string { return "" }
-
-func (m *MockChannels) AppendNodes(...*Node) {}
-
-var _ Interface = (*MockChannels)(nil)
-
-func TestNewChannels(t *testing.T) {
-	tests := []struct {
-		name      string
-		options   []Option
-		expectErr bool
-	}{
-		{
-			name: "Valid channels with default input/output",
-			options: []Option{
-				WithDefaultChannels(),
-				WithNodes(
-					&Node{Name: DefaultChannelInput, Outgoing: []string{"A"}},
-					&Node{Name: "A", Incoming: []string{DefaultChannelInput}, Outgoing: []string{"B"}},
-					&Node{Name: "B", Incoming: []string{"A"}, Outgoing: []string{DefaultChannelOutput}},
-					&Node{Name: DefaultChannelOutput, Incoming: []string{"B"}},
-				),
-			},
-			expectErr: false,
-		},
-		{
-			name: "Valid channels with custom input/output",
-			options: []Option{
-				WithChannelInput("start"),
-				WithChannelOutput("end"),
-				WithNodes(
-					&Node{Name: "start", Outgoing: []string{"A"}},
-					&Node{Name: "A", Incoming: []string{"start"}, Outgoing: []string{"B"}},
-					&Node{Name: "B", Incoming: []string{"A"}, Outgoing: []string{"end"}},
-					&Node{Name: "end", Incoming: []string{"B"}},
-				),
-			},
-			expectErr: false,
-		},
-		{
-			name: "Invalid channels with cycle",
-			options: []Option{
-				WithDefaultChannels(),
-				WithNodes(
-					&Node{Name: DefaultChannelInput, Outgoing: []string{"A"}},
-					&Node{Name: "A", Incoming: []string{DefaultChannelInput}, Outgoing: []string{"B"}},
-					&Node{Name: "B", Incoming: []string{"A"}, Outgoing: []string{"C"}},
-					&Node{Name: "C", Incoming: []string{"B"}, Outgoing: []string{"A"}}, // Cycle here
-					&Node{Name: DefaultChannelOutput, Incoming: []string{"C"}},
-				),
-			},
-			expectErr: true,
-		},
-		{
-			name: "Invalid channels with hanging predecessor",
-			options: []Option{
-				WithDefaultChannels(),
-				WithNodes(
-					&Node{Name: DefaultChannelInput, Outgoing: []string{"A"}},
-					&Node{Name: "A", Incoming: []string{DefaultChannelInput}, Outgoing: []string{"B"}},
-					&Node{Name: "B", Incoming: []string{"A"}, Outgoing: []string{"output"}},
-					&Node{Name: "C", Incoming: []string{"D"}, Outgoing: []string{}}, // D does not exist
-					&Node{Name: DefaultChannelOutput, Incoming: []string{"C"}},
-				),
-			},
-			expectErr: true,
-		},
+// Helper function to create and validate graph from transits
+func createAndValidateGraph(t *testing.T, transits []*Transit, sourceName, sinkName string) *Graph {
+	graph, err := BuildGraphFromTransits(transits, sourceName, sinkName)
+	if err != nil {
+		t.Fatalf("failed to build graph: %v", err)
 	}
+	if err := graph.HasCycle(); err != nil {
+		t.Fatalf("graph has a cycle: %v", err)
+	}
+	return graph
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			channels, _ := NewChannels(tt.options...)
-			_, err := channels.GetGraph()
-			if (err != nil) != tt.expectErr {
-				t.Errorf("NewChannels() error = %v, expectErr %v", err, tt.expectErr)
+func TestLinearDAG(t *testing.T) {
+	transits := []*Transit{
+		NewTransit("A", []string{}, []string{"chan1"}),
+		NewTransit("B", []string{"chan1"}, []string{"chan2"}),
+		NewTransit("C", []string{"chan2"}, []string{}),
+	}
+	graph := createAndValidateGraph(t, transits, "A", "C")
+	sorted, err := graph.TopologicalSort()
+	if err != nil {
+		t.Fatalf("topological sort failed: %v", err)
+	}
+	expected := [][]string{
+		{"A", "B", "C"},
+	}
+	validateTopologicalSort(t, sorted, expected)
+}
+
+func TestComplexDAG(t *testing.T) {
+	transits := []*Transit{
+		NewTransit("A", []string{}, []string{"chan1"}),
+		NewTransit("B", []string{"chan1"}, []string{"chan2", "chan3"}),
+		NewTransit("C", []string{"chan2"}, []string{"chan4"}),
+		NewTransit("D", []string{"chan3"}, []string{"chan4"}),
+		NewTransit("E", []string{"chan4"}, []string{}),
+	}
+	graph := createAndValidateGraph(t, transits, "A", "E")
+	sorted, err := graph.TopologicalSort()
+	if err != nil {
+		t.Fatalf("topological sort failed: %v", err)
+	}
+	expected := [][]string{
+		{"A", "B", "C", "D", "E"},
+		{"A", "B", "D", "C", "E"},
+	}
+	validateTopologicalSort(t, sorted, expected)
+}
+
+func TestCycleDetection(t *testing.T) {
+	transits := []*Transit{
+		NewTransit("A", []string{}, []string{"chan1"}),
+		NewTransit("B", []string{"chan1"}, []string{"chan2"}),
+		NewTransit("C", []string{"chan2"}, []string{"chan3"}),
+		NewTransit("D", []string{"chan3"}, []string{"chan1"}),
+	}
+	_, err := BuildGraphFromTransits(transits, "A", "D")
+	if err == nil {
+		t.Fatal("expected cycle detection error, but got none")
+	}
+	var cycleError *CycleError
+	if !errors.As(err, &cycleError) {
+		t.Fatalf("expected CycleError, but got %v", err)
+	}
+}
+
+func TestDanglingIncoming(t *testing.T) {
+	transits := []*Transit{
+		NewTransit("A", []string{}, []string{"chan1"}),
+		NewTransit("B", []string{"chan1"}, []string{}),
+		NewTransit("C", []string{"chan2"}, []string{}), // Dangling incoming chan2
+	}
+	_, err := BuildGraphFromTransits(transits, "A", "B")
+	if err == nil {
+		t.Fatal("expected dangling incoming error, but got none")
+	}
+}
+
+func TestDanglingOutgoing(t *testing.T) {
+	transits := []*Transit{
+		NewTransit("A", []string{}, []string{"chan1"}),
+		NewTransit("B", []string{"chan1"}, []string{}),
+		NewTransit("C", []string{}, []string{"chan2"}), // Dangling outgoing chan2
+	}
+	_, err := BuildGraphFromTransits(transits, "A", "B")
+	if err == nil {
+		t.Fatal("expected dangling outgoing error, but got none")
+	}
+}
+
+// Helper function to validate topological sort results
+func validateTopologicalSort(t *testing.T, actual, expected [][]string) {
+	if len(actual) != len(expected) {
+		t.Fatalf("expected %d topological sorts, but got %d", len(expected), len(actual))
+	}
+	for _, exp := range expected {
+		found := false
+		for _, act := range actual {
+			if equalSlices(act, exp) {
+				found = true
+				break
 			}
-		})
+		}
+		if !found {
+			t.Fatalf("expected topological sort %v not found in actual results", exp)
+		}
 	}
 }
 
-func TestChannels_GetGraph(t *testing.T) {
-	channels, err := NewChannels(
-		WithDefaultChannels(),
-		WithNodes(
-			&Node{Name: DefaultChannelInput, Outgoing: []string{"A"}},
-			&Node{Name: "A", Incoming: []string{DefaultChannelInput}, Outgoing: []string{"B"}},
-			&Node{Name: "B", Incoming: []string{"A"}, Outgoing: []string{DefaultChannelOutput}},
-			&Node{Name: DefaultChannelOutput, Incoming: []string{"B"}},
-		),
-	)
-	if err != nil {
-		t.Fatalf("NewChannels() error = %v", err)
+// Utility function to check if two slices are equal
+func equalSlices(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
 	}
-
-	graph, err := channels.GetGraph()
-	if err != nil {
-		t.Fatalf("Channels.GetGraph() error = %v", err)
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
 	}
-
-	if graph == nil {
-		t.Fatal("Channels.GetGraph() returned nil graph")
-	}
-
-	err = graph.HasCycle()
-	if err != nil {
-		t.Errorf("Graph.HasCycle() error = %v", err)
-	}
-}
-
-func TestChannels_ClearGraph(t *testing.T) {
-	channels, err := NewChannels(
-		WithDefaultChannels(),
-		WithNodes(
-			NewNode(DefaultChannelInput, nil, []string{"A"}),
-			&Node{Name: "A", Incoming: []string{DefaultChannelInput}, Outgoing: []string{"B"}},
-			&Node{Name: "B", Incoming: []string{"A"}, Outgoing: []string{DefaultChannelOutput}},
-			&Node{Name: DefaultChannelOutput, Incoming: []string{"B"}},
-		),
-	)
-	if err != nil {
-		t.Fatalf("NewChannels() error = %v", err)
-	}
-
-	_, err = channels.GetGraph()
-	if err != nil {
-		t.Fatalf("Channels.GetGraph() error = %v", err)
-	}
-
-	channels.ClearGraph()
-
-	if channels.graph != nil {
-		t.Fatal("Channels.ClearGraph() did not clear the graph")
-	}
-}
-
-func WithOptionError() Option {
-	return func(*Channels) error {
-		return errors.New("failed to create channels")
-	}
-}
-
-func TestChannelsWithOptionError(t *testing.T) {
-	channels, err := NewChannels(WithOptionError())
-	assert.Nil(t, channels)
-	assert.Error(t, err)
-}
-
-func TestChannelsGetChannelInputOutput(t *testing.T) {
-	channels, err := NewChannels(WithDefaultChannels())
-	assert.NoError(t, err)
-	assert.Equal(t, DefaultChannelInput, channels.GetChannelInput())
-	assert.Equal(t, DefaultChannelOutput, channels.GetChannelOutput())
+	return true
 }
