@@ -7,9 +7,7 @@ package channel
 
 // Transit represents a transit entity with name, incoming channels, and outgoing channels.
 type Transit struct {
-	Name              string
-	Incoming          []string
-	Outgoing          []string
+	Node
 	ListeningChannels map[string][]string
 	SendingChannels   map[string][]string
 }
@@ -17,9 +15,7 @@ type Transit struct {
 // NewTransit creates a new Transit with the given name, incoming channels, and outgoing channels.
 func NewTransit(name string, incoming, outgoing []string) *Transit {
 	return &Transit{
-		Name:              name,
-		Incoming:          incoming,
-		Outgoing:          outgoing,
+		Node:              *NewNode(name, incoming, outgoing),
 		ListeningChannels: make(map[string][]string),
 		SendingChannels:   make(map[string][]string),
 	}
