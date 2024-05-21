@@ -22,7 +22,7 @@ func NewTransit(name string, incoming, outgoing []string) *Transit {
 }
 
 // BuildGraphFromTransits constructs a Graph from a list of Transits.
-func BuildGraphFromTransits(transits []*Transit, sourceName, sinkName string) (*Graph, error) {
+func BuildGraphFromTransits(sourceName, sinkName string, transits ...*Transit) (*Graph, error) {
 	transitMap := make(map[string]*Transit)
 	nodeMap := make(map[string]*Node)
 

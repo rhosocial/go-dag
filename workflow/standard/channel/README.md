@@ -15,7 +15,7 @@ The `channel` package is designed to manage the channels between workflow transi
 To install the `channel` package, use:
 
 ```sh
-go get github.com/rhosocial/go-dag/standard/channel
+go get github.com/rhosocial/go-dag/workflow/standard/channel
 ```
 
 ## Usage
@@ -30,7 +30,7 @@ package main
 
 import (
     "fmt"
-    "github.com/rhosocial/go-dag/standard/channel"
+    "github.com/rhosocial/go-dag/workflow/standard/channel"
 )
 
 func main() {
@@ -98,7 +98,7 @@ package main
 
 import (
     "fmt"
-    "github.com/rhosocial/go-dag/standard/channel"
+    "github.com/rhosocial/go-dag/workflow/standard/channel"
 )
 
 func main() {
@@ -139,7 +139,7 @@ transits := []*Transit{
     NewTransit("C", []string{"chan2"}, []string{}),
 }
 
-graph, err := BuildGraphFromTransits(transits, "A", "C")
+graph, err := BuildGraphFromTransits("A", "C", transits...)
 if err != nil {
     fmt.Printf("Error building graph: %v\n", err)
     return

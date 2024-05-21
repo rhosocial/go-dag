@@ -11,7 +11,7 @@ import (
 
 // Helper function to create and validate graph from transits
 func createAndValidateGraph(t *testing.T, transits []*Transit, sourceName, sinkName string) *Graph {
-	graph, err := BuildGraphFromTransits(transits, sourceName, sinkName)
+	graph, err := BuildGraphFromTransits(sourceName, sinkName, transits...)
 	if err != nil {
 		t.Fatalf("failed to build graph: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestCycleDetection(t *testing.T) {
 		NewTransit("C", []string{"chan2"}, []string{"chan3"}),
 		NewTransit("D", []string{"chan3"}, []string{"chan1"}),
 	}
-	_, err := BuildGraphFromTransits(transits, "A", "D")
+	_, err := BuildGraphFromTransits("A", "D", transits...)
 	if err == nil {
 		t.Fatal("expected cycle detection error, but got none")
 	}
@@ -81,7 +81,7 @@ func TestDanglingIncoming(t *testing.T) {
 		NewTransit("B", []string{"chan1"}, []string{}),
 		NewTransit("C", []string{"chan2"}, []string{}), // Dangling incoming chan2
 	}
-	_, err := BuildGraphFromTransits(transits, "A", "B")
+	_, err := BuildGraphFromTransits("A", "B", transits...)
 	if err == nil {
 		t.Fatal("expected dangling incoming error, but got none")
 	}
@@ -93,7 +93,7 @@ func TestDanglingOutgoing(t *testing.T) {
 		NewTransit("B", []string{"chan1"}, []string{}),
 		NewTransit("C", []string{}, []string{"chan2"}), // Dangling outgoing chan2
 	}
-	_, err := BuildGraphFromTransits(transits, "A", "B")
+	_, err := BuildGraphFromTransits("A", "B", transits...)
 	if err == nil {
 		t.Fatal("expected dangling outgoing error, but got none")
 	}
