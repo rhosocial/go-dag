@@ -5,19 +5,23 @@
 // Package channel helps the workflow manage the transit channel.
 package channel
 
-// Transit represents a transit entity with name, listening channels, and sending channels.
+// Transit represents a transit entity with name, incoming channels, and outgoing channels.
 type Transit struct {
 	Name              string
-	ListeningChannels []string
-	SendingChannels   []string
+	Incoming          []string
+	Outgoing          []string
+	ListeningChannels map[string][]string
+	SendingChannels   map[string][]string
 }
 
-// NewTransit creates a new Transit with the given name, listening channels, and sending channels.
-func NewTransit(name string, listeningChannels, sendingChannels []string) *Transit {
+// NewTransit creates a new Transit with the given name, incoming channels, and outgoing channels.
+func NewTransit(name string, incoming, outgoing []string) *Transit {
 	return &Transit{
 		Name:              name,
-		ListeningChannels: listeningChannels,
-		SendingChannels:   sendingChannels,
+		Incoming:          incoming,
+		Outgoing:          outgoing,
+		ListeningChannels: make(map[string][]string),
+		SendingChannels:   make(map[string][]string),
 	}
 }
 
@@ -36,13 +40,15 @@ func BuildGraphFromTransits(transits []*Transit, sourceName, sinkName string) (*
 		nodeMap[transit.Name] = NewNode(transit.Name, []string{}, []string{})
 	}
 
-	// Create edges based on listening and sending channels
+	// Create edges based on incoming and outgoing channels
 	for _, transit := range transits {
-		for _, listeningChannel := range transit.ListeningChannels {
+		for _, incomingChannel := range transit.Incoming {
 			for _, t := range transits {
-				if t.Name != transit.Name && contains(t.SendingChannels, listeningChannel) {
+				if t.Name != transit.Name && contains(t.Outgoing, incomingChannel) {
 					nodeMap[transit.Name].Incoming = append(nodeMap[transit.Name].Incoming, t.Name)
 					nodeMap[t.Name].Outgoing = append(nodeMap[t.Name].Outgoing, transit.Name)
+					transit.ListeningChannels[t.Name] = append(transit.ListeningChannels[t.Name], incomingChannel)
+					t.SendingChannels[transit.Name] = append(t.SendingChannels[transit.Name], incomingChannel)
 				}
 			}
 		}
