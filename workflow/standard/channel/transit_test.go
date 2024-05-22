@@ -10,7 +10,7 @@ import (
 )
 
 // Helper function to create and validate graph from transits
-func createAndValidateGraph(t *testing.T, transits []*Transit, sourceName, sinkName string) *Graph {
+func createAndValidateGraph(t *testing.T, transits []Transit, sourceName, sinkName string) *Graph {
 	graph, err := BuildGraphFromTransits(sourceName, sinkName, transits...)
 	if err != nil {
 		t.Fatalf("failed to build graph: %v", err)
@@ -22,7 +22,7 @@ func createAndValidateGraph(t *testing.T, transits []*Transit, sourceName, sinkN
 }
 
 func TestLinearDAG(t *testing.T) {
-	transits := []*Transit{
+	transits := []Transit{
 		NewTransit("A", []string{}, []string{"chan1"}),
 		NewTransit("B", []string{"chan1"}, []string{"chan2"}),
 		NewTransit("C", []string{"chan2"}, []string{}),
@@ -39,7 +39,7 @@ func TestLinearDAG(t *testing.T) {
 }
 
 func TestComplexDAG(t *testing.T) {
-	transits := []*Transit{
+	transits := []Transit{
 		NewTransit("A", []string{}, []string{"chan1"}),
 		NewTransit("B", []string{"chan1"}, []string{"chan2", "chan3"}),
 		NewTransit("C", []string{"chan2"}, []string{"chan4"}),
@@ -59,7 +59,7 @@ func TestComplexDAG(t *testing.T) {
 }
 
 func TestCycleDetection(t *testing.T) {
-	transits := []*Transit{
+	transits := []Transit{
 		NewTransit("A", []string{}, []string{"chan1"}),
 		NewTransit("B", []string{"chan1"}, []string{"chan2"}),
 		NewTransit("C", []string{"chan2"}, []string{"chan3"}),
@@ -76,7 +76,7 @@ func TestCycleDetection(t *testing.T) {
 }
 
 func TestDanglingIncoming(t *testing.T) {
-	transits := []*Transit{
+	transits := []Transit{
 		NewTransit("A", []string{}, []string{"chan1"}),
 		NewTransit("B", []string{"chan1"}, []string{}),
 		NewTransit("C", []string{"chan2"}, []string{}), // Dangling incoming chan2
@@ -88,7 +88,7 @@ func TestDanglingIncoming(t *testing.T) {
 }
 
 func TestDanglingOutgoing(t *testing.T) {
-	transits := []*Transit{
+	transits := []Transit{
 		NewTransit("A", []string{}, []string{"chan1"}),
 		NewTransit("B", []string{"chan1"}, []string{}),
 		NewTransit("C", []string{}, []string{"chan2"}), // Dangling outgoing chan2

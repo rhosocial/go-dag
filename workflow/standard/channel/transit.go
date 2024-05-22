@@ -6,24 +6,38 @@
 package channel
 
 // Transit represents a transit entity with name, incoming channels, and outgoing channels.
-type Transit struct {
+type Transit interface {
 	Node
+	AppendListeningChannels(key string, value ...string)
+	AppendSendingChannels(key string, value ...string)
+}
+
+type SimpleTransit struct {
 	ListeningChannels map[string][]string
 	SendingChannels   map[string][]string
+	SimpleNode
+}
+
+func (t *SimpleTransit) AppendListeningChannels(key string, value ...string) {
+	t.ListeningChannels[key] = append(t.ListeningChannels[key], value...)
+}
+
+func (t *SimpleTransit) AppendSendingChannels(key string, value ...string) {
+	t.SendingChannels[key] = append(t.SendingChannels[key], value...)
 }
 
 // NewTransit creates a new Transit with the given name, incoming channels, and outgoing channels.
-func NewTransit(name string, incoming, outgoing []string) *Transit {
-	return &Transit{
-		Node:              NewSimpleNode(name, incoming, outgoing),
+func NewTransit(name string, incoming, outgoing []string) Transit {
+	return &SimpleTransit{
+		SimpleNode:        *NewSimpleNode(name, incoming, outgoing),
 		ListeningChannels: make(map[string][]string),
 		SendingChannels:   make(map[string][]string),
 	}
 }
 
 // BuildGraphFromTransits constructs a Graph from a list of Transits.
-func BuildGraphFromTransits(sourceName, sinkName string, transits ...*Transit) (*Graph, error) {
-	transitMap := make(map[string]*Transit)
+func BuildGraphFromTransits(sourceName, sinkName string, transits ...Transit) (*Graph, error) {
+	transitMap := make(map[string]Transit)
 	nodeMap := make(map[string]Node)
 
 	// Create a map of Transit for easy lookup.
@@ -43,8 +57,8 @@ func BuildGraphFromTransits(sourceName, sinkName string, transits ...*Transit) (
 				if t.GetName() != transit.GetName() && contains(t.GetOutgoing(), incomingChannel) {
 					nodeMap[transit.GetName()].AppendIncoming(t.GetName())
 					nodeMap[t.GetName()].AppendOutgoing(transit.GetName())
-					transit.ListeningChannels[t.GetName()] = append(transit.ListeningChannels[t.GetName()], incomingChannel)
-					t.SendingChannels[transit.GetName()] = append(t.SendingChannels[transit.GetName()], incomingChannel)
+					transit.AppendListeningChannels(t.GetName(), incomingChannel)
+					t.AppendSendingChannels(transit.GetName(), incomingChannel)
 				}
 			}
 		}

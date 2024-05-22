@@ -133,7 +133,7 @@ To build a graph from a list of `Transit` objects, use the `BuildGraphFromTransi
 You need to specify the source and sink node names:
 
 ```go
-transits := []*Transit{
+transits := []Transit{
     NewTransit("A", []string{}, []string{"chan1"}),
     NewTransit("B", []string{"chan1"}, []string{"chan2"}),
     NewTransit("C", []string{"chan2"}, []string{}),
