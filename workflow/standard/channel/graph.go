@@ -41,19 +41,51 @@ type DAG interface {
 	TopologicalSort() ([][]string, error)
 }
 
-// Node represents a node in the graph.
-type Node struct {
-	Name     string
-	Incoming []string
-	Outgoing []string
+// Node is an interface representing a node in the graph.
+type Node interface {
+	GetName() string
+	GetIncoming() []string
+	AppendIncoming(...string)
+	GetOutgoing() []string
+	AppendOutgoing(...string)
 }
 
-// NewNode creates a new Node with the given name, incoming, and outgoing edges.
-func NewNode(name string, incoming []string, outgoing []string) *Node {
-	return &Node{
-		Name:     name,
-		Incoming: incoming,
-		Outgoing: outgoing,
+// SimpleNode represents a node in the graph.
+type SimpleNode struct {
+	name     string
+	incoming []string
+	outgoing []string
+}
+
+// GetName returns the name of the node.
+func (n *SimpleNode) GetName() string {
+	return n.name
+}
+
+// GetIncoming returns the incoming edges of the node.
+func (n *SimpleNode) GetIncoming() []string {
+	return n.incoming
+}
+
+func (n *SimpleNode) AppendIncoming(incoming ...string) {
+	n.incoming = append(n.incoming, incoming...)
+}
+
+// GetOutgoing returns the outgoing edges of the node.
+func (n *SimpleNode) GetOutgoing() []string {
+	return n.outgoing
+}
+
+func (n *SimpleNode) AppendOutgoing(outgoing ...string) {
+	n.outgoing = append(n.outgoing, outgoing...)
+}
+
+// NewSimpleNode creates a new SimpleNode with the given name, incoming, and outgoing edges.
+func NewSimpleNode(name string, incoming []string, outgoing []string) *SimpleNode {
+	return &SimpleNode{
+		name:     name,
+		incoming: incoming,
+		outgoing: outgoing,
 	}
 }
 
@@ -93,7 +125,7 @@ func (g *Graph) HasCycle() error {
 		visited[nodeName] = true
 		recStack[nodeName] = true
 
-		for _, successor := range g.NodesMap[nodeName].Outgoing {
+		for _, successor := range g.NodesMap[nodeName].GetOutgoing() {
 			if dfs(successor) {
 				cycleNodes = append(cycleNodes, nodeName)
 				return true
@@ -129,7 +161,7 @@ func (g *Graph) TopologicalSort() ([][]string, error) {
 
 		for node, deg := range inDegree {
 			if deg == 0 && !visited[node] {
-				for _, successor := range g.NodesMap[node].Outgoing {
+				for _, successor := range g.NodesMap[node].GetOutgoing() {
 					inDegree[successor]--
 				}
 
@@ -146,7 +178,7 @@ func (g *Graph) TopologicalSort() ([][]string, error) {
 				// Reset visited status and in-degree for backtracking
 				visited[node] = false
 				stack = stack[:len(stack)-1]
-				for _, successor := range g.NodesMap[node].Outgoing {
+				for _, successor := range g.NodesMap[node].GetOutgoing() {
 					inDegree[successor]++
 				}
 
@@ -169,7 +201,7 @@ func (g *Graph) TopologicalSort() ([][]string, error) {
 	inDegree := make(map[string]int)
 
 	for node := range g.NodesMap {
-		inDegree[node] = len(g.NodesMap[node].Incoming)
+		inDegree[node] = len(g.NodesMap[node].GetIncoming())
 	}
 
 	// Perform all topological sorts
@@ -177,7 +209,7 @@ func (g *Graph) TopologicalSort() ([][]string, error) {
 }
 
 // NewGraph initializes a new Graph.
-func NewGraph(sourceName, sinkName string, nodes []*Node) (*Graph, error) {
+func NewGraph(sourceName, sinkName string, nodes ...Node) (*Graph, error) {
 	graph := &Graph{
 		NodesMap: make(map[string]Node),
 		Source:   sourceName,
@@ -186,46 +218,46 @@ func NewGraph(sourceName, sinkName string, nodes []*Node) (*Graph, error) {
 
 	// Add nodes to the graph
 	for _, node := range nodes {
-		graph.NodesMap[node.Name] = *node
+		graph.NodesMap[node.GetName()] = node
 	}
 
 	// Check for hanging predecessors and successors.
 	for _, node := range nodes {
-		if node.Name == sourceName || node.Name == sinkName {
+		if node.GetName() == sourceName || node.GetName() == sinkName {
 			continue
 		}
-		for _, pred := range node.Incoming {
+		for _, pred := range node.GetIncoming() {
 			if _, exists := graph.NodesMap[pred]; !exists {
-				return nil, HangingIncomingError{predecessor: pred, name: node.Name}
+				return nil, HangingIncomingError{predecessor: pred, name: node.GetName()}
 			}
 		}
-		for _, successor := range node.Outgoing {
+		for _, successor := range node.GetOutgoing() {
 			if _, exists := graph.NodesMap[successor]; !exists {
-				return nil, HangingOutgoingError{successor: successor, name: node.Name}
+				return nil, HangingOutgoingError{successor: successor, name: node.GetName()}
 			}
 		}
 	}
 
-	var visitedSource *Node
-	var visitedSink *Node
+	var visitedSource Node
+	var visitedSink Node
 
 	for _, node := range nodes {
-		if node.Name == sourceName && len(node.Incoming) == 0 {
+		if node.GetName() == sourceName && len(node.GetIncoming()) == 0 {
 			if visitedSource == nil {
 				visitedSource = node
 			} else {
-				return nil, SourceDuplicatedError{source: visitedSource.Name, name: node.Name}
+				return nil, SourceDuplicatedError{source: visitedSource.GetName(), name: node.GetName()}
 			}
-		} else if node.Name == sinkName && len(node.Outgoing) == 0 {
+		} else if node.GetName() == sinkName && len(node.GetOutgoing()) == 0 {
 			if visitedSink == nil {
 				visitedSink = node
 			} else {
-				return nil, SinkDuplicatedError{sink: visitedSink.Name, name: node.Name}
+				return nil, SinkDuplicatedError{sink: visitedSink.GetName(), name: node.GetName()}
 			}
-		} else if len(node.Incoming) == 0 {
-			return nil, DanglingIncomingError{name: node.Name}
-		} else if len(node.Outgoing) == 0 {
-			return nil, DanglingOutgoingError{name: node.Name}
+		} else if len(node.GetIncoming()) == 0 {
+			return nil, DanglingIncomingError{name: node.GetName()}
+		} else if len(node.GetOutgoing()) == 0 {
+			return nil, DanglingOutgoingError{name: node.GetName()}
 		}
 	}
 

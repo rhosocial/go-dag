@@ -15,7 +15,7 @@ type Transit struct {
 // NewTransit creates a new Transit with the given name, incoming channels, and outgoing channels.
 func NewTransit(name string, incoming, outgoing []string) *Transit {
 	return &Transit{
-		Node:              *NewNode(name, incoming, outgoing),
+		Node:              NewSimpleNode(name, incoming, outgoing),
 		ListeningChannels: make(map[string][]string),
 		SendingChannels:   make(map[string][]string),
 	}
@@ -24,40 +24,40 @@ func NewTransit(name string, incoming, outgoing []string) *Transit {
 // BuildGraphFromTransits constructs a Graph from a list of Transits.
 func BuildGraphFromTransits(sourceName, sinkName string, transits ...*Transit) (*Graph, error) {
 	transitMap := make(map[string]*Transit)
-	nodeMap := make(map[string]*Node)
+	nodeMap := make(map[string]Node)
 
 	// Create a map of Transit for easy lookup.
 	for _, transit := range transits {
-		transitMap[transit.Name] = transit
+		transitMap[transit.GetName()] = transit
 	}
 
 	// Initialize nodes from transits
 	for _, transit := range transits {
-		nodeMap[transit.Name] = NewNode(transit.Name, []string{}, []string{})
+		nodeMap[transit.GetName()] = NewSimpleNode(transit.GetName(), []string{}, []string{})
 	}
 
 	// Create edges based on incoming and outgoing channels
 	for _, transit := range transits {
-		for _, incomingChannel := range transit.Incoming {
+		for _, incomingChannel := range transit.GetIncoming() {
 			for _, t := range transits {
-				if t.Name != transit.Name && contains(t.Outgoing, incomingChannel) {
-					nodeMap[transit.Name].Incoming = append(nodeMap[transit.Name].Incoming, t.Name)
-					nodeMap[t.Name].Outgoing = append(nodeMap[t.Name].Outgoing, transit.Name)
-					transit.ListeningChannels[t.Name] = append(transit.ListeningChannels[t.Name], incomingChannel)
-					t.SendingChannels[transit.Name] = append(t.SendingChannels[transit.Name], incomingChannel)
+				if t.GetName() != transit.GetName() && contains(t.GetOutgoing(), incomingChannel) {
+					nodeMap[transit.GetName()].AppendIncoming(t.GetName())
+					nodeMap[t.GetName()].AppendOutgoing(transit.GetName())
+					transit.ListeningChannels[t.GetName()] = append(transit.ListeningChannels[t.GetName()], incomingChannel)
+					t.SendingChannels[transit.GetName()] = append(t.SendingChannels[transit.GetName()], incomingChannel)
 				}
 			}
 		}
 	}
 
 	// Convert nodeMap to slice
-	var nodes []*Node
+	var nodes []Node
 	for _, node := range nodeMap {
 		nodes = append(nodes, node)
 	}
 
 	// Create the graph
-	return NewGraph(sourceName, sinkName, nodes)
+	return NewGraph(sourceName, sinkName, nodes...)
 }
 
 // Utility function to check if a slice contains a string

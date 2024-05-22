@@ -34,13 +34,13 @@ import (
 )
 
 func main() {
-    nodes := []*channel.Node{
-        channel.NewNode("A", []string{}, []string{"B"}),
-        channel.NewNode("B", []string{"A"}, []string{"C"}),
-        channel.NewNode("C", []string{"B"}, []string{}),
+    nodes := []channel.Node{
+        channel.NewSimpleNode("A", []string{}, []string{"B"}),
+        channel.NewSimpleNode("B", []string{"A"}, []string{"C"}),
+        channel.NewSimpleNode("C", []string{"B"}, []string{}),
     }
 
-    graph, err := channel.NewGraph("A", "C", nodes)
+    graph, err := channel.NewGraph("A", "C", nodes...)
     if err != nil {
         fmt.Println("Error creating graph:", err)
         return
@@ -57,13 +57,13 @@ The `channel` package automatically checks for cycles when creating a graph.
 If a cycle is detected, an error is returned:
 
 ```go
-nodes := []*channel.Node{
-    channel.NewNode("A", []string{}, []string{"B"}),
-    channel.NewNode("B", []string{"A"}, []string{"C"}),
-    channel.NewNode("C", []string{"B"}, []string{"A"}), // Cycle here
+nodes := []channel.Node{
+    channel.NewSimpleNode("A", []string{}, []string{"B"}),
+    channel.NewSimpleNode("B", []string{"A"}, []string{"C"}),
+    channel.NewSimpleNode("C", []string{"B"}, []string{"A"}), // Cycle here
 }
 
-_, err := channel.NewGraph("A", "C", nodes)
+_, err := channel.NewGraph("A", "C", nodes...)
 if err != nil {
     fmt.Println("Error:", err)
 }
@@ -102,14 +102,14 @@ import (
 )
 
 func main() {
-    nodes := []*channel.Node{
-        channel.NewNode("A", []string{}, []string{"B", "C"}),
-        channel.NewNode("B", []string{"A"}, []string{"D"}),
-        channel.NewNode("C", []string{"A"}, []string{"D"}),
-        channel.NewNode("D", []string{"B", "C"}, []string{}),
+    nodes := []channel.Node{
+        channel.NewSimpleNode("A", []string{}, []string{"B", "C"}),
+        channel.NewSimpleNode("B", []string{"A"}, []string{"D"}),
+        channel.NewSimpleNode("C", []string{"A"}, []string{"D"}),
+        channel.NewSimpleNode("D", []string{"B", "C"}, []string{}),
     }
 
-    graph, err := channel.NewGraph("A", "D", nodes)
+    graph, err := channel.NewGraph("A", "D", nodes...)
     if err != nil {
         fmt.Println("Error creating graph:", err)
         return
