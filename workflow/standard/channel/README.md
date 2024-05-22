@@ -1,6 +1,19 @@
 # channel
 
-The `channel` package is designed to manage the channels between workflow transits. It provides a structure to handle directed acyclic graphs (DAGs) representing workflows, with nodes and edges indicating the flow and dependencies between different tasks or stages.
+The `channel` package is designed to manage the channels between workflow transits.
+It provides a structure to handle directed acyclic graphs (DAGs) representing workflows,
+with nodes and edges indicating the flow and dependencies between different tasks or stages.
+
+The name "channel" for this package is chosen because it aligns with the central concept of utilizing channels
+to facilitate the flow of data between different stages or tasks within a workflow.
+Additionally, it serves to distinguish this package's functionality,
+which focuses on managing the flow and dependencies represented by directed acyclic graphs (DAGs),
+from other components such as the graph itself and the workflow transit.
+
+This package has been fully interface-based. If the provided structures in the package do not meet your requirements,
+you have the flexibility to implement your own structures based on the interfaces DAG, Node, and Transit.
+On the other hand, you can also independently utilize this package for other purposes,
+leveraging its functionality for managing directed acyclic graphs (DAGs) representing workflows or any other relevant scenarios.
 
 ## Features
 
