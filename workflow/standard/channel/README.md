@@ -48,9 +48,9 @@ import (
 
 func main() {
     nodes := []channel.Node{
-        channel.NewSimpleNode("A", []string{}, []string{"B"}),
-        channel.NewSimpleNode("B", []string{"A"}, []string{"C"}),
-        channel.NewSimpleNode("C", []string{"B"}, []string{}),
+        channel.NewNode("A", []string{}, []string{"B"}),
+        channel.NewNode("B", []string{"A"}, []string{"C"}),
+        channel.NewNode("C", []string{"B"}, []string{}),
     }
 
     graph, err := channel.NewGraph("A", "C", nodes...)
@@ -71,9 +71,9 @@ If a cycle is detected, an error is returned:
 
 ```go
 nodes := []channel.Node{
-    channel.NewSimpleNode("A", []string{}, []string{"B"}),
-    channel.NewSimpleNode("B", []string{"A"}, []string{"C"}),
-    channel.NewSimpleNode("C", []string{"B"}, []string{"A"}), // Cycle here
+    channel.NewNode("A", []string{}, []string{"B"}),
+    channel.NewNode("B", []string{"A"}, []string{"C"}),
+    channel.NewNode("C", []string{"B"}, []string{"A"}), // Cycle here
 }
 
 _, err := channel.NewGraph("A", "C", nodes...)
@@ -116,10 +116,10 @@ import (
 
 func main() {
     nodes := []channel.Node{
-        channel.NewSimpleNode("A", []string{}, []string{"B", "C"}),
-        channel.NewSimpleNode("B", []string{"A"}, []string{"D"}),
-        channel.NewSimpleNode("C", []string{"A"}, []string{"D"}),
-        channel.NewSimpleNode("D", []string{"B", "C"}, []string{}),
+        channel.NewNode("A", []string{}, []string{"B", "C"}),
+        channel.NewNode("B", []string{"A"}, []string{"D"}),
+        channel.NewNode("C", []string{"A"}, []string{"D"}),
+        channel.NewNode("D", []string{"B", "C"}, []string{}),
     }
 
     graph, err := channel.NewGraph("A", "D", nodes...)

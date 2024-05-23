@@ -4,7 +4,10 @@
 
 package channel
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // HangingIncomingError represents an error where a node has a hanging incoming node.
 type HangingIncomingError struct {
@@ -68,4 +71,20 @@ type SinkDuplicatedError struct {
 
 func (e SinkDuplicatedError) Error() string {
 	return fmt.Sprintf("node %s cannot be sink as the sink %s already exists", e.name, e.sink)
+}
+
+// CycleError represents an error due to a cycle in the graph.
+type CycleError struct {
+	nodes []string
+	error
+}
+
+// Error returns a formatted string describing the cycle.
+func (e *CycleError) Error() string {
+	return fmt.Sprintf("graph has a cycle: %s", strings.Join(e.nodes, " -> "))
+}
+
+// NewCycleError creates a new CycleError with the given cycle nodes.
+func NewCycleError(nodes ...string) *CycleError {
+	return &CycleError{nodes: nodes}
 }

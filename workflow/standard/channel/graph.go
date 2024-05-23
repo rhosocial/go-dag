@@ -4,27 +4,6 @@
 
 package channel
 
-import (
-	"fmt"
-	"strings"
-)
-
-// CycleError represents an error due to a cycle in the graph.
-type CycleError struct {
-	nodes []string
-	error
-}
-
-// Error returns a formatted string describing the cycle.
-func (e *CycleError) Error() string {
-	return fmt.Sprintf("graph has a cycle: %s", strings.Join(e.nodes, " -> "))
-}
-
-// NewCycleError creates a new CycleError with the given cycle nodes.
-func NewCycleError(nodes ...string) *CycleError {
-	return &CycleError{nodes: nodes}
-}
-
 // ReverseSlice reverses a slice of any type.
 func ReverseSlice[T any](s []T) []T {
 	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
@@ -67,6 +46,7 @@ func (n *SimpleNode) GetIncoming() []string {
 	return n.incoming
 }
 
+// AppendIncoming appends the incoming edge to the node.
 func (n *SimpleNode) AppendIncoming(incoming ...string) {
 	n.incoming = append(n.incoming, incoming...)
 }
@@ -76,12 +56,13 @@ func (n *SimpleNode) GetOutgoing() []string {
 	return n.outgoing
 }
 
+// AppendOutgoing appends the outgoing edge to the node.
 func (n *SimpleNode) AppendOutgoing(outgoing ...string) {
 	n.outgoing = append(n.outgoing, outgoing...)
 }
 
-// NewSimpleNode creates a new SimpleNode with the given name, incoming, and outgoing edges.
-func NewSimpleNode(name string, incoming []string, outgoing []string) *SimpleNode {
+// NewNode creates a new SimpleNode with the given name, incoming, and outgoing edges.
+func NewNode(name string, incoming []string, outgoing []string) Node {
 	return &SimpleNode{
 		name:     name,
 		incoming: incoming,
@@ -147,6 +128,23 @@ func (g *Graph) HasCycle() error {
 }
 
 // TopologicalSort returns all possible topological sorts of the DAG.
+//
+// The result is a two-dimensional slice, the length of which represents the number of possibilities.
+// If a cycle exists in the graph, an error is reported.
+//
+// For example:
+//
+//	1.If the graph is A -> B -> C，[["A", "B", "C"]], nil will be returned.
+//
+//	2.If the graph is
+//
+//	   A -> B1 -> C
+//
+//	   |          |
+//
+//	   -> B2 ->
+//
+//	   [["A", "B1", "B2", "C"], ["A", "B2", "B1", "C"]], nil will be returned.
 func (g *Graph) TopologicalSort() ([][]string, error) {
 	// Check for cycle first
 	if err := g.HasCycle(); err != nil {

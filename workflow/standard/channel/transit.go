@@ -15,7 +15,7 @@ type Transit interface {
 type SimpleTransit struct {
 	ListeningChannels map[string][]string
 	SendingChannels   map[string][]string
-	SimpleNode
+	Node
 }
 
 func (t *SimpleTransit) AppendListeningChannels(key string, value ...string) {
@@ -29,7 +29,7 @@ func (t *SimpleTransit) AppendSendingChannels(key string, value ...string) {
 // NewTransit creates a new Transit with the given name, incoming channels, and outgoing channels.
 func NewTransit(name string, incoming, outgoing []string) Transit {
 	return &SimpleTransit{
-		SimpleNode:        *NewSimpleNode(name, incoming, outgoing),
+		Node:              NewNode(name, incoming, outgoing),
 		ListeningChannels: make(map[string][]string),
 		SendingChannels:   make(map[string][]string),
 	}
@@ -47,7 +47,7 @@ func BuildGraphFromTransits(sourceName, sinkName string, transits ...Transit) (*
 
 	// Initialize nodes from transits
 	for _, transit := range transits {
-		nodeMap[transit.GetName()] = NewSimpleNode(transit.GetName(), []string{}, []string{})
+		nodeMap[transit.GetName()] = NewNode(transit.GetName(), []string{}, []string{})
 	}
 
 	// Create edges based on incoming and outgoing channels

@@ -42,11 +42,11 @@ func TestNewGraph(t *testing.T) {
 			start: "input",
 			end:   "output",
 			nodes: []Node{
-				NewSimpleNode("input", []string{}, []string{"A"}),
-				NewSimpleNode("A", []string{"input"}, []string{"B"}),
-				NewSimpleNode("B", []string{"A"}, []string{"C"}),
-				NewSimpleNode("C", []string{"B"}, []string{"output"}),
-				NewSimpleNode("output", []string{"C"}, []string{}),
+				NewNode("input", []string{}, []string{"A"}),
+				NewNode("A", []string{"input"}, []string{"B"}),
+				NewNode("B", []string{"A"}, []string{"C"}),
+				NewNode("C", []string{"B"}, []string{"output"}),
+				NewNode("output", []string{"C"}, []string{}),
 			},
 			expectErr: false,
 		},
@@ -55,11 +55,11 @@ func TestNewGraph(t *testing.T) {
 			start: "input",
 			end:   "output",
 			nodes: []Node{
-				NewSimpleNode("input", []string{}, []string{"A"}),
-				NewSimpleNode("A", []string{"input"}, []string{"B"}),
-				NewSimpleNode("B", []string{"A"}, []string{"C"}),
-				NewSimpleNode("C", []string{"B"}, []string{"A"}), // Cycle here
-				NewSimpleNode("output", []string{"C"}, []string{}),
+				NewNode("input", []string{}, []string{"A"}),
+				NewNode("A", []string{"input"}, []string{"B"}),
+				NewNode("B", []string{"A"}, []string{"C"}),
+				NewNode("C", []string{"B"}, []string{"A"}), // Cycle here
+				NewNode("output", []string{"C"}, []string{}),
 			},
 			expectErr: true,
 		},
@@ -68,11 +68,11 @@ func TestNewGraph(t *testing.T) {
 			start: "input",
 			end:   "output",
 			nodes: []Node{
-				NewSimpleNode("input", []string{}, []string{"A"}),
-				NewSimpleNode("A", []string{"input"}, []string{"B"}),
-				NewSimpleNode("B", []string{"A"}, []string{"C"}),
-				NewSimpleNode("C", []string{"B", "D"}, []string{"output"}), // D does not exist
-				NewSimpleNode("output", []string{"C"}, []string{}),
+				NewNode("input", []string{}, []string{"A"}),
+				NewNode("A", []string{"input"}, []string{"B"}),
+				NewNode("B", []string{"A"}, []string{"C"}),
+				NewNode("C", []string{"B", "D"}, []string{"output"}), // D does not exist
+				NewNode("output", []string{"C"}, []string{}),
 			},
 			expectErr: true,
 		},
@@ -81,11 +81,11 @@ func TestNewGraph(t *testing.T) {
 			start: "input",
 			end:   "output",
 			nodes: []Node{
-				NewSimpleNode("input", []string{}, []string{"A"}),
-				NewSimpleNode("A", []string{"input"}, []string{"B"}),
-				NewSimpleNode("B", []string{"A"}, []string{"C", "D"}), // D does not exist
-				NewSimpleNode("C", []string{"B"}, []string{"output"}),
-				NewSimpleNode("output", []string{"C"}, []string{}),
+				NewNode("input", []string{}, []string{"A"}),
+				NewNode("A", []string{"input"}, []string{"B"}),
+				NewNode("B", []string{"A"}, []string{"C", "D"}), // D does not exist
+				NewNode("C", []string{"B"}, []string{"output"}),
+				NewNode("output", []string{"C"}, []string{}),
 			},
 			expectErr: true,
 		},
@@ -94,8 +94,8 @@ func TestNewGraph(t *testing.T) {
 			start: "input",
 			end:   "output",
 			nodes: []Node{
-				NewSimpleNode("input", []string{}, []string{"output"}),
-				NewSimpleNode("output", []string{"input"}, []string{}),
+				NewNode("input", []string{}, []string{"output"}),
+				NewNode("output", []string{"input"}, []string{}),
 			},
 			expectErr: false,
 		},
@@ -104,11 +104,11 @@ func TestNewGraph(t *testing.T) {
 			start: "input",
 			end:   "output",
 			nodes: []Node{
-				NewSimpleNode("B", []string{"A"}, []string{}),
-				NewSimpleNode("C", []string{}, []string{"output"}),
-				NewSimpleNode("output", []string{"C"}, []string{}),
-				NewSimpleNode("input", []string{}, []string{"A"}),
-				NewSimpleNode("A", []string{"input"}, []string{"B"}),
+				NewNode("B", []string{"A"}, []string{}),
+				NewNode("C", []string{}, []string{"output"}),
+				NewNode("output", []string{"C"}, []string{}),
+				NewNode("input", []string{}, []string{"A"}),
+				NewNode("A", []string{"input"}, []string{"B"}),
 			},
 			expectErr: true,
 		},
@@ -140,11 +140,11 @@ func TestHasCycle(t *testing.T) {
 			name: "No cycle",
 			graph: &Graph{
 				NodesMap: map[string]Node{
-					"input":  NewSimpleNode("input", []string{}, []string{"A"}),
-					"A":      NewSimpleNode("A", []string{"input"}, []string{"B"}),
-					"B":      NewSimpleNode("B", []string{"A"}, []string{"C"}),
-					"C":      NewSimpleNode("C", []string{"B"}, []string{"output"}),
-					"output": NewSimpleNode("output", []string{"C"}, []string{}),
+					"input":  NewNode("input", []string{}, []string{"A"}),
+					"A":      NewNode("A", []string{"input"}, []string{"B"}),
+					"B":      NewNode("B", []string{"A"}, []string{"C"}),
+					"C":      NewNode("C", []string{"B"}, []string{"output"}),
+					"output": NewNode("output", []string{"C"}, []string{}),
 				},
 				Source: "input",
 				Sink:   "output",
@@ -155,11 +155,11 @@ func TestHasCycle(t *testing.T) {
 			name: "Cycle present",
 			graph: &Graph{
 				NodesMap: map[string]Node{
-					"input":  NewSimpleNode("input", []string{}, []string{"A"}),
-					"A":      NewSimpleNode("A", []string{"input"}, []string{"B"}),
-					"B":      NewSimpleNode("B", []string{"A"}, []string{"C"}),
-					"C":      NewSimpleNode("C", []string{"B"}, []string{"A"}),
-					"output": NewSimpleNode("output", []string{"C"}, []string{}),
+					"input":  NewNode("input", []string{}, []string{"A"}),
+					"A":      NewNode("A", []string{"input"}, []string{"B"}),
+					"B":      NewNode("B", []string{"A"}, []string{"C"}),
+					"C":      NewNode("C", []string{"B"}, []string{"A"}),
+					"output": NewNode("output", []string{"C"}, []string{}),
 				},
 				Source: "input",
 				Sink:   "output",
@@ -184,10 +184,10 @@ func TestNewGraphWithExamples(t *testing.T) {
 	t.Run("Example 1: Simple DAG without cycles or dangling nodes", func(t *testing.T) {
 		// Example 1: Simple DAG without cycles or dangling nodes
 		nodes1 := []Node{
-			NewSimpleNode("input", []string{}, []string{"A"}),
-			NewSimpleNode("A", []string{"input"}, []string{"B"}),
-			NewSimpleNode("B", []string{"A"}, []string{"output"}),
-			NewSimpleNode("output", []string{"B"}, []string{}),
+			NewNode("input", []string{}, []string{"A"}),
+			NewNode("A", []string{"input"}, []string{"B"}),
+			NewNode("B", []string{"A"}, []string{"output"}),
+			NewNode("output", []string{"B"}, []string{}),
 		}
 
 		graph1, err1 := NewGraph("input", "output", nodes1...)
@@ -200,10 +200,10 @@ func TestNewGraphWithExamples(t *testing.T) {
 	t.Run("Example 2: Graph with a cycle", func(t *testing.T) {
 		// Example 2: Graph with a cycle
 		nodes2 := []Node{
-			NewSimpleNode("input", []string{}, []string{"A"}),
-			NewSimpleNode("A", []string{"input"}, []string{"B"}),
-			NewSimpleNode("B", []string{"A"}, []string{"A"}), // Creates a cycle
-			NewSimpleNode("output", []string{"B"}, []string{}),
+			NewNode("input", []string{}, []string{"A"}),
+			NewNode("A", []string{"input"}, []string{"B"}),
+			NewNode("B", []string{"A"}, []string{"A"}), // Creates a cycle
+			NewNode("output", []string{"B"}, []string{}),
 		}
 
 		_, err2 := NewGraph("input", "output", nodes2...)
@@ -216,10 +216,10 @@ func TestNewGraphWithExamples(t *testing.T) {
 	t.Run("Example 3: Graph with a dangling outgoing node", func(t *testing.T) {
 		// Example 3: Graph with a dangling outgoing node
 		nodes3 := []Node{
-			NewSimpleNode("input", []string{}, []string{"A"}),
-			NewSimpleNode("A", []string{"input"}, []string{"B"}),
-			NewSimpleNode("B", []string{"A"}, []string{}),      // B is a dangling node
-			NewSimpleNode("output", []string{"C"}, []string{}), // C is not defined
+			NewNode("input", []string{}, []string{"A"}),
+			NewNode("A", []string{"input"}, []string{"B"}),
+			NewNode("B", []string{"A"}, []string{}),      // B is a dangling node
+			NewNode("output", []string{"C"}, []string{}), // C is not defined
 		}
 
 		_, err3 := NewGraph("input", "output", nodes3...)
@@ -232,10 +232,10 @@ func TestNewGraphWithExamples(t *testing.T) {
 	t.Run("Example 4: Graph with a dangling incoming node", func(t *testing.T) {
 		// Example 4: Graph with a dangling incoming node
 		nodes4 := []Node{
-			NewSimpleNode("input", []string{}, []string{"A"}),
-			NewSimpleNode("A", []string{"input"}, []string{"B"}),
-			NewSimpleNode("B", []string{}, []string{"A"}),      // B is a dangling node
-			NewSimpleNode("output", []string{"C"}, []string{}), // C is not defined
+			NewNode("input", []string{}, []string{"A"}),
+			NewNode("A", []string{"input"}, []string{"B"}),
+			NewNode("B", []string{}, []string{"A"}),      // B is a dangling node
+			NewNode("output", []string{"C"}, []string{}), // C is not defined
 		}
 
 		_, err4 := NewGraph("input", "output", nodes4...)
@@ -248,10 +248,10 @@ func TestNewGraphWithExamples(t *testing.T) {
 	t.Run("Example 5: Graph with both cycle and dangling nodes", func(t *testing.T) {
 		// Example 5: Graph with both cycle and dangling nodes
 		nodes5 := []Node{
-			NewSimpleNode("input", []string{}, []string{"A"}),
-			NewSimpleNode("A", []string{"input"}, []string{"B"}),
-			NewSimpleNode("B", []string{"A"}, []string{"input"}), // Creates a cycle
-			NewSimpleNode("output", []string{"D"}, []string{}),   // D is not defined
+			NewNode("input", []string{}, []string{"A"}),
+			NewNode("A", []string{"input"}, []string{"B"}),
+			NewNode("B", []string{"A"}, []string{"input"}), // Creates a cycle
+			NewNode("output", []string{"D"}, []string{}),   // D is not defined
 		}
 
 		_, err5 := NewGraph("input", "output", nodes5...)
@@ -264,11 +264,11 @@ func TestNewGraphWithExamples(t *testing.T) {
 	t.Run("Example 6: Graph with duplicated sources", func(t *testing.T) {
 		// Example 6: Graph with duplicated sources
 		nodes6 := []Node{
-			NewSimpleNode("input", []string{}, []string{"A"}),
-			NewSimpleNode("A", []string{"input"}, []string{"B"}),
-			NewSimpleNode("B", []string{"A"}, []string{"output"}),
-			NewSimpleNode("input", []string{}, []string{"C"}), // Duplicated source
-			NewSimpleNode("output", []string{"B"}, []string{}),
+			NewNode("input", []string{}, []string{"A"}),
+			NewNode("A", []string{"input"}, []string{"B"}),
+			NewNode("B", []string{"A"}, []string{"output"}),
+			NewNode("input", []string{}, []string{"C"}), // Duplicated source
+			NewNode("output", []string{"B"}, []string{}),
 		}
 
 		_, err6 := NewGraph("input", "output", nodes6...)
@@ -281,11 +281,11 @@ func TestNewGraphWithExamples(t *testing.T) {
 	t.Run("Example 7: Graph with duplicated sinks", func(t *testing.T) {
 		// Example 7: Graph with duplicated sinks
 		nodes7 := []Node{
-			NewSimpleNode("input", []string{}, []string{"A"}),
-			NewSimpleNode("A", []string{"input"}, []string{"B"}),
-			NewSimpleNode("B", []string{"A"}, []string{"output"}),
-			NewSimpleNode("output", []string{"B"}, []string{}),
-			NewSimpleNode("output", []string{"C"}, []string{}), // Duplicated sink
+			NewNode("input", []string{}, []string{"A"}),
+			NewNode("A", []string{"input"}, []string{"B"}),
+			NewNode("B", []string{"A"}, []string{"output"}),
+			NewNode("output", []string{"B"}, []string{}),
+			NewNode("output", []string{"C"}, []string{}), // Duplicated sink
 		}
 
 		_, err7 := NewGraph("input", "output", nodes7...)
@@ -298,11 +298,11 @@ func TestNewGraphWithExamples(t *testing.T) {
 	t.Run("Example 8: Valid graph with input and output nodes", func(t *testing.T) {
 		// Example 8: Valid graph with input and output nodes
 		nodes8 := []Node{
-			NewSimpleNode("input", []string{}, []string{"A"}),
-			NewSimpleNode("A", []string{"input"}, []string{"B"}),
-			NewSimpleNode("B", []string{"A"}, []string{"C"}),
-			NewSimpleNode("C", []string{"B"}, []string{"output"}),
-			NewSimpleNode("output", []string{"C"}, []string{}),
+			NewNode("input", []string{}, []string{"A"}),
+			NewNode("A", []string{"input"}, []string{"B"}),
+			NewNode("B", []string{"A"}, []string{"C"}),
+			NewNode("C", []string{"B"}, []string{"output"}),
+			NewNode("output", []string{"C"}, []string{}),
 		}
 
 		graph8, err8 := NewGraph("input", "output", nodes8...)
@@ -316,9 +316,9 @@ func TestNewGraphWithExamples(t *testing.T) {
 func TestGraph_TopologicalSort(t *testing.T) {
 	t.Run("Simple DAG", func(t *testing.T) {
 		nodes := []Node{
-			NewSimpleNode("A", []string{}, []string{"B"}),
-			NewSimpleNode("B", []string{"A"}, []string{"C"}),
-			NewSimpleNode("C", []string{"B"}, []string{}),
+			NewNode("A", []string{}, []string{"B"}),
+			NewNode("B", []string{"A"}, []string{"C"}),
+			NewNode("C", []string{"B"}, []string{}),
 		}
 
 		graph, err := NewGraph("A", "C", nodes...)
@@ -334,10 +334,10 @@ func TestGraph_TopologicalSort(t *testing.T) {
 
 	t.Run("DAG with Multiple Branches", func(t *testing.T) {
 		nodes := []Node{
-			NewSimpleNode("A", []string{}, []string{"B", "C"}),
-			NewSimpleNode("B", []string{"A"}, []string{"D"}),
-			NewSimpleNode("C", []string{"A"}, []string{"D"}),
-			NewSimpleNode("D", []string{"B", "C"}, []string{}),
+			NewNode("A", []string{}, []string{"B", "C"}),
+			NewNode("B", []string{"A"}, []string{"D"}),
+			NewNode("C", []string{"A"}, []string{"D"}),
+			NewNode("D", []string{"B", "C"}, []string{}),
 		}
 
 		graph, err := NewGraph("A", "D", nodes...)
@@ -354,7 +354,7 @@ func TestGraph_TopologicalSort(t *testing.T) {
 
 	t.Run("Single Node DAG", func(t *testing.T) {
 		nodes := []Node{
-			NewSimpleNode("A", []string{}, []string{}),
+			NewNode("A", []string{}, []string{}),
 		}
 
 		graph, err := NewGraph("A", "A", nodes...)
@@ -370,9 +370,9 @@ func TestGraph_TopologicalSort(t *testing.T) {
 
 	t.Run("DAG with Cycle", func(t *testing.T) {
 		nodes := []Node{
-			NewSimpleNode("A", []string{}, []string{"B"}),
-			NewSimpleNode("B", []string{"A"}, []string{"C"}),
-			NewSimpleNode("C", []string{"B"}, []string{"A"}), // Cycle here
+			NewNode("A", []string{}, []string{"B"}),
+			NewNode("B", []string{"A"}, []string{"C"}),
+			NewNode("C", []string{"B"}, []string{"A"}), // Cycle here
 		}
 
 		graph := &Graph{
