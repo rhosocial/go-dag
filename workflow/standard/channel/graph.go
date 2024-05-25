@@ -207,11 +207,14 @@ func (g *Graph) TopologicalSort() ([][]string, error) {
 }
 
 // NewGraph initializes a new Graph.
-func NewGraph(sourceName, sinkName string, nodes ...Node) (*Graph, error) {
+//
+// For the definition of a node, please see Node API.
+// source and sink refers to the names of the starting and ending nodes of the graph.
+func NewGraph(source, sink string, nodes ...Node) (*Graph, error) {
 	graph := &Graph{
 		NodesMap: make(map[string]Node),
-		Source:   sourceName,
-		Sink:     sinkName,
+		Source:   source,
+		Sink:     sink,
 	}
 
 	// Add nodes to the graph
@@ -221,7 +224,7 @@ func NewGraph(sourceName, sinkName string, nodes ...Node) (*Graph, error) {
 
 	// Check for hanging predecessors and successors.
 	for _, node := range nodes {
-		if node.GetName() == sourceName || node.GetName() == sinkName {
+		if node.GetName() == source || node.GetName() == sink {
 			continue
 		}
 		for _, pred := range node.GetIncoming() {
@@ -240,13 +243,13 @@ func NewGraph(sourceName, sinkName string, nodes ...Node) (*Graph, error) {
 	var visitedSink Node
 
 	for _, node := range nodes {
-		if node.GetName() == sourceName && len(node.GetIncoming()) == 0 {
+		if node.GetName() == source && len(node.GetIncoming()) == 0 {
 			if visitedSource == nil {
 				visitedSource = node
 			} else {
 				return nil, SourceDuplicatedError{source: visitedSource.GetName(), name: node.GetName()}
 			}
-		} else if node.GetName() == sinkName && len(node.GetOutgoing()) == 0 {
+		} else if node.GetName() == sink && len(node.GetOutgoing()) == 0 {
 			if visitedSink == nil {
 				visitedSink = node
 			} else {

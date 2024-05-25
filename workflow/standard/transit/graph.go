@@ -1,4 +1,4 @@
-// Copyright (c) 2024. vistart. All rights reserved.
+// Copyright (c) 2023 - 2024. vistart. All rights reserved.
 // Use of this source code is governed by Apache-2.0 license
 // that can be found in the LICENSE file.
 
@@ -14,34 +14,53 @@ const (
 	OutputNodeName = "output"
 )
 
+// GraphInterface defines the interface for managing the transit graph,
+// incorporating operations from the channel package's DAG interface
+// and an additional method to retrieve transits.
 type GraphInterface interface {
 	channel.DAG
-	GetTransit() []channel.Transit
+	GetTransit() map[string]channel.Transit
+	GetTransitSlice() *[]channel.Transit
 }
 
+// Graph represents the transit graph structure,
+// composed of a channel.DAG instance and a slice of channel.Transit.
 type Graph struct {
 	graph    channel.DAG
-	transits []channel.Transit
+	transits map[string]channel.Transit
 }
 
+// GetSourceName returns the name of the source node in the transit graph.
 func (g *Graph) GetSourceName() string {
 	return g.graph.GetSourceName()
 }
 
+// GetSinkName returns the name of the sink node in the transit graph.
 func (g *Graph) GetSinkName() string {
 	return g.graph.GetSinkName()
 }
 
+// HasCycle checks if the transit graph contains a cycle.
 func (g *Graph) HasCycle() error {
 	return g.graph.HasCycle()
 }
 
+// TopologicalSort returns all possible topological sorts of the transit graph.
 func (g *Graph) TopologicalSort() ([][]string, error) {
 	return g.graph.TopologicalSort()
 }
 
-func (g *Graph) GetTransit() []channel.Transit {
+// GetTransit returns the transits attached to the transit graph.
+func (g *Graph) GetTransit() map[string]channel.Transit {
 	return g.transits
+}
+
+func (g *Graph) GetTransitSlice() *[]channel.Transit {
+	s := make([]channel.Transit, 0)
+	for _, t := range g.transits {
+		s = append(s, t)
+	}
+	return &s
 }
 
 // Option is a type for specifying options for creating a Transit.
@@ -63,7 +82,8 @@ func NewGraph(input, output string, options ...Option) (GraphInterface, error) {
 	inputTransit := channel.NewTransit(InputNodeName, []string{}, []string{input})
 	outputTransit := channel.NewTransit(OutputNodeName, []string{output}, []string{})
 
-	g, err := channel.BuildGraphFromTransits(InputNodeName, OutputNodeName, append(graph.transits, inputTransit, outputTransit)...)
+	// Build graph from transits
+	g, err := channel.BuildGraphFromTransits(InputNodeName, OutputNodeName, append(*graph.GetTransitSlice(), inputTransit, outputTransit)...)
 	if err != nil {
 		return nil, err
 	}
@@ -72,13 +92,15 @@ func NewGraph(input, output string, options ...Option) (GraphInterface, error) {
 	return graph, nil
 }
 
-// WithIntermediateTransits is an option to add intermediate transits to the transit.
+// WithIntermediateTransits is an option to add intermediate transits to the graph.
 func WithIntermediateTransits(transits ...channel.Transit) Option {
 	return func(g *Graph) error {
 		if g.GetTransit() == nil {
-			g.transits = make([]channel.Transit, 0)
+			g.transits = make(map[string]channel.Transit)
 		}
-		g.transits = append(g.transits, transits...)
+		for _, transit := range transits {
+			g.transits[transit.GetName()] = transit
+		}
 		return nil
 	}
 }
