@@ -6,22 +6,41 @@
 package channel
 
 // Transit represents a transit entity with name, incoming channels, and outgoing channels.
+//
+// Unlike Node, the relationship between a Transit is defined by a listening and sending channel.
+// Therefore, a BuildGraphFromTransits build graph is required.
 type Transit interface {
+	// Node is responsible for saving and handling relationships with Transit.
 	Node
+
+	// AppendListeningChannels appends a listening channel name(s) to the current node.
+	//
+	// key refers to the name of the listening node, and value refers to the channel name of the node.
 	AppendListeningChannels(key string, value ...string)
+
+	// AppendSendingChannels appends a sending channel name(s) to the current node.
+	//
+	// key refers to the name of the sending node, and value refers to the channel name of the node.
 	AppendSendingChannels(key string, value ...string)
 }
 
+// SimpleTransit is a simple implementation of the Transit interface.
 type SimpleTransit struct {
 	ListeningChannels map[string][]string
 	SendingChannels   map[string][]string
 	Node
 }
 
+// AppendListeningChannels appends a listening channel name(s) to the current node.
+//
+// key refers to the name of the listening node, and value refers to the channel name of the node.
 func (t *SimpleTransit) AppendListeningChannels(key string, value ...string) {
 	t.ListeningChannels[key] = append(t.ListeningChannels[key], value...)
 }
 
+// AppendSendingChannels appends a sending channel name(s) to the current node.
+//
+// key refers to the name of the sending node, and value refers to the channel name of the node.
 func (t *SimpleTransit) AppendSendingChannels(key string, value ...string) {
 	t.SendingChannels[key] = append(t.SendingChannels[key], value...)
 }
@@ -37,13 +56,7 @@ func NewTransit(name string, incoming, outgoing []string) Transit {
 
 // BuildGraphFromTransits constructs a Graph from a list of Transits.
 func BuildGraphFromTransits(sourceName, sinkName string, transits ...Transit) (*Graph, error) {
-	transitMap := make(map[string]Transit)
 	nodeMap := make(map[string]Node)
-
-	// Create a map of Transit for easy lookup.
-	for _, transit := range transits {
-		transitMap[transit.GetName()] = transit
-	}
 
 	// Initialize nodes from transits
 	for _, transit := range transits {

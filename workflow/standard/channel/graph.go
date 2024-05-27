@@ -142,7 +142,7 @@ func (g *Graph) HasCycle() error {
 //
 //	   |          |
 //
-//	   -> B2 ->
+//	    --> B2 -->
 //
 //	   [["A", "B1", "B2", "C"], ["A", "B2", "B1", "C"]], nil will be returned.
 func (g *Graph) TopologicalSort() ([][]string, error) {
