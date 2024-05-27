@@ -31,7 +31,7 @@ type Item struct {
 }
 
 // Expired checks if the item has expired.
-func (i *Item) Expired() bool {
+func (i Item) Expired() bool {
 	if i.expiredAt == nil {
 		return false
 	}
@@ -39,11 +39,11 @@ func (i *Item) Expired() bool {
 }
 
 // Value retrieves the value of the item.
-func (i *Item) Value() any {
+func (i Item) Value() any {
 	return i.value
 }
 
 // NewItem creates and initializes a new cache item with the given value.
-func NewItem(value any) *Item {
-	return &Item{value: value}
+func NewItem(value any) Item {
+	return Item{value: value}
 }

@@ -81,14 +81,14 @@ func (c *MemoryCache) Set(key KeyGetter, value any, options ...ItemOption) error
 	item := NewItem(value)
 
 	for _, option := range options {
-		err := option(item)
+		err := option(&item)
 		if err != nil {
 			return err
 		}
 	}
 
 	keyGetter := key
-	c.items[keyGetter.GetKey()] = *item
+	c.items[keyGetter.GetKey()] = item
 	return nil
 }
 

@@ -6,6 +6,7 @@ package cache
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -127,4 +128,135 @@ func TestMemoryCache_Clear(t *testing.T) {
 	assert.Equal(t, err.Error(), ErrKeyNotFound{key: MemoryCacheKeyGetter{key1: 1, key2: 2}.GetKey()}.Error())
 	assert.Nil(t, result)
 	assert.Len(t, c.items, 0)
+}
+
+type testKey string
+
+func (k testKey) GetKey() string {
+	return string(k)
+}
+
+func benchmarkCacheSet(c Interface, b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		key := testKey("key" + strconv.Itoa(i))
+		value := "value" + strconv.Itoa(i)
+		c.Set(key, value)
+	}
+}
+
+func benchmarkCacheGet(c Interface, b *testing.B) {
+	// Pre-fill the cache
+	for i := 0; i < b.N; i++ {
+		key := testKey("key" + strconv.Itoa(i))
+		value := "value" + strconv.Itoa(i)
+		c.Set(key, value)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		key := testKey("key" + strconv.Itoa(i))
+		c.Get(key)
+	}
+}
+
+func benchmarkCacheDelete(c Interface, b *testing.B) {
+	// Pre-fill the cache
+	for i := 0; i < b.N; i++ {
+		key := testKey("key" + strconv.Itoa(i))
+		value := "value" + strconv.Itoa(i)
+		c.Set(key, value)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		key := testKey("key" + strconv.Itoa(i))
+		c.Delete(key)
+	}
+}
+
+func benchmarkCacheClear(c Interface, b *testing.B) {
+	// Pre-fill the cache
+	for i := 0; i < 1000; i++ {
+		key := testKey("key" + strconv.Itoa(i))
+		value := "value" + strconv.Itoa(i)
+		c.Set(key, value)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		c.Clear()
+	}
+}
+
+func BenchmarkMemoryCache_Set(b *testing.B) {
+	cache := NewMemoryCache()
+	benchmarkCacheSet(cache, b)
+}
+
+func BenchmarkMemoryCache_Get(b *testing.B) {
+	cache := NewMemoryCache()
+	benchmarkCacheGet(cache, b)
+}
+
+func BenchmarkMemoryCache_Delete(b *testing.B) {
+	cache := NewMemoryCache()
+	benchmarkCacheDelete(cache, b)
+}
+
+func BenchmarkMemoryCache_Clear(b *testing.B) {
+	cache := NewMemoryCache()
+	benchmarkCacheClear(cache, b)
+}
+
+func benchmarkCacheParallel(c Interface, b *testing.B) {
+	// Step 1: Pre-fill the cache with some values
+	for i := 0; i < 1000; i++ {
+		key := testKey("key" + strconv.Itoa(i))
+		value := "value" + strconv.Itoa(i)
+		c.Set(key, value)
+	}
+
+	b.ResetTimer()
+
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			// Step 2: Access some hit-and-miss keys
+			for j := 0; j < 500; j++ {
+				key := testKey("key" + strconv.Itoa(j))
+				c.Get(key)
+			}
+			for j := 1000; j < 1500; j++ {
+				key := testKey("key" + strconv.Itoa(j))
+				c.Get(key)
+			}
+
+			// Step 3: Delete some keys
+			for j := 0; j < 500; j++ {
+				key := testKey("key" + strconv.Itoa(j))
+				c.Delete(key)
+			}
+
+			// Step 4: Add some new values
+			for j := 1500; j < 2000; j++ {
+				key := testKey("key" + strconv.Itoa(j))
+				value := "value" + strconv.Itoa(j)
+				c.Set(key, value)
+			}
+
+			// Step 5: Access some hit-and-miss keys again
+			for j := 500; j < 1000; j++ {
+				key := testKey("key" + strconv.Itoa(j))
+				c.Get(key)
+			}
+			for j := 2000; j < 2500; j++ {
+				key := testKey("key" + strconv.Itoa(j))
+				c.Get(key)
+			}
+		}
+	})
+}
+
+func BenchmarkMemoryCache_Parallel(b *testing.B) {
+	cache := NewMemoryCache()
+	benchmarkCacheParallel(cache, b)
 }
