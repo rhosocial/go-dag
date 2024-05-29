@@ -109,7 +109,7 @@ func TestNewContext(t *testing.T) {
 	c2, err := NewContext(WithIdentifier(mockIdentifier))
 	assert.NoError(t, err)
 	assert.NotNil(t, c2)
-	assert.Equal(t, mockIdentifier, c2.identifier)
+	assert.Equal(t, mockIdentifier, c2.Identifier)
 
 	// Test with WithOptions option
 	mockOptions := &MockOptions{}
@@ -144,7 +144,7 @@ func TestNewContext(t *testing.T) {
 	assert.NotNil(t, c)
 	assert.Equal(t, ctx, c.context)
 	assert.Equal(t, ctx, c.GetContext())
-	assert.Equal(t, mockIdentifier, c.identifier)
+	assert.Equal(t, mockIdentifier, c.Identifier)
 	assert.Equal(t, mockOptions, c.options)
 	assert.Equal(t, mockReports, c.reports)
 	assert.Equal(t, mockEventManager, c.eventManager)
@@ -176,6 +176,7 @@ func WithContextError(context context.Context, cancel context.CancelCauseFunc) O
 		return errors.New("test creating new context with error")
 	}
 }
+
 func TestNewContextWithError(t *testing.T) {
 	ctx, cancel := context.WithCancelCause(context.Background())
 

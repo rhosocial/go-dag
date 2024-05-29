@@ -79,8 +79,8 @@ func NewGraph(input, output string, options ...Option) (GraphInterface, error) {
 	}
 
 	// Create input and output nodes
-	inputTransit := channel.NewTransit(InputNodeName, []string{}, []string{input})
-	outputTransit := channel.NewTransit(OutputNodeName, []string{output}, []string{})
+	inputTransit := channel.NewTransit(InputNodeName, []string{}, []string{input}, nil)
+	outputTransit := channel.NewTransit(OutputNodeName, []string{output}, []string{}, nil)
 
 	// Build graph from transits
 	g, err := channel.BuildGraphFromTransits(InputNodeName, OutputNodeName, append(*graph.GetTransitSlice(), inputTransit, outputTransit)...)

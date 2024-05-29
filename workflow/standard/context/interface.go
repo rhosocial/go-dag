@@ -19,7 +19,7 @@ type Interface interface {
 // additional functionalities for managing cancellations and request-scoped values.
 //
 // Context is used to represent the context of a single execution. In addition to
-// holding the context and cancel function, it carries the identifier for the execution,
+// holding the context and cancel function, it carries the Identifier for the execution,
 // all configuration options, and the post-execution reports. This Context is used to
 // distinguish between different executions fed into the same workflow.
 //
@@ -37,8 +37,8 @@ type Context struct {
 
 	Interface
 
-	// identifier holds an instance of IdentifierInterface for managing unique identifiers.
-	identifier IdentifierInterface
+	// Identifier holds an instance of IdentifierInterface for managing unique identifiers.
+	Identifier IdentifierInterface
 
 	// options holds an instance of OptionsInterface for storing configuration options.
 	//
@@ -101,10 +101,10 @@ func WithContext(context context.Context, cancel context.CancelCauseFunc) Option
 	}
 }
 
-// WithIdentifier sets the identifier for the context.
+// WithIdentifier sets the Identifier for the context.
 func WithIdentifier(identifier IdentifierInterface) Option {
 	return func(context *Context) error {
-		context.identifier = identifier
+		context.Identifier = identifier
 		return nil
 	}
 }

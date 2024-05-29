@@ -5,6 +5,10 @@
 // Package channel helps the workflow manage the transit channel.
 package channel
 
+import "context"
+
+type WorkerFunc func(context.Context, ...any) (any, error)
+
 // Transit represents a transit entity with name, incoming channels, and outgoing channels.
 //
 // Unlike Node, the relationship between a Transit is defined by a listening and sending channel.
@@ -22,13 +26,21 @@ type Transit interface {
 	//
 	// key refers to the name of the sending node, and value refers to the channel name of the node.
 	AppendSendingChannels(key string, value ...string)
+
+	// GetWorker returns the worker function defined within the transit.
+	GetWorker() WorkerFunc
 }
 
 // SimpleTransit is a simple implementation of the Transit interface.
 type SimpleTransit struct {
 	ListeningChannels map[string][]string
 	SendingChannels   map[string][]string
+	worker            WorkerFunc
 	Node
+}
+
+func (t *SimpleTransit) GetWorker() WorkerFunc {
+	return t.worker
 }
 
 // AppendListeningChannels appends a listening channel name(s) to the current node.
@@ -46,16 +58,17 @@ func (t *SimpleTransit) AppendSendingChannels(key string, value ...string) {
 }
 
 // NewTransit creates a new Transit with the given name, incoming channels, and outgoing channels.
-func NewTransit(name string, incoming, outgoing []string) Transit {
+func NewTransit(name string, incoming, outgoing []string, worker WorkerFunc) Transit {
 	return &SimpleTransit{
 		Node:              NewNode(name, incoming, outgoing),
 		ListeningChannels: make(map[string][]string),
 		SendingChannels:   make(map[string][]string),
+		worker:            worker,
 	}
 }
 
 // BuildGraphFromTransits constructs a Graph from a list of Transits.
-func BuildGraphFromTransits(sourceName, sinkName string, transits ...Transit) (*Graph, error) {
+func BuildGraphFromTransits(source, sink string, transits ...Transit) (*Graph, error) {
 	nodeMap := make(map[string]Node)
 
 	// Initialize nodes from transits
@@ -84,7 +97,7 @@ func BuildGraphFromTransits(sourceName, sinkName string, transits ...Transit) (*
 	}
 
 	// Create the graph
-	return NewGraph(sourceName, sinkName, nodes...)
+	return NewGraph(source, sink, nodes...)
 }
 
 // Utility function to check if a slice contains a string

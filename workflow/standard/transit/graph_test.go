@@ -21,7 +21,7 @@ func WithTransitsError() Option {
 func TestNewGraph(t *testing.T) {
 	t.Run("normal", func(t *testing.T) {
 		graph, err := NewGraph("input", "output", WithIntermediateTransits(
-			channel.NewTransit("t1", []string{"input"}, []string{"output"}),
+			channel.NewTransit("t1", []string{"input"}, []string{"output"}, nil),
 		))
 		assert.NoError(t, err)
 		t.Log(graph)
@@ -51,9 +51,9 @@ func createAndValidateGraph(t *testing.T, transits []channel.Transit, sourceName
 
 func TestLinearDAG(t *testing.T) {
 	transits := []channel.Transit{
-		channel.NewTransit("A", []string{"input"}, []string{"chan1"}),
-		channel.NewTransit("B", []string{"chan1"}, []string{"chan2"}),
-		channel.NewTransit("C", []string{"chan2"}, []string{"output"}),
+		channel.NewTransit("A", []string{"input"}, []string{"chan1"}, nil),
+		channel.NewTransit("B", []string{"chan1"}, []string{"chan2"}, nil),
+		channel.NewTransit("C", []string{"chan2"}, []string{"output"}, nil),
 	}
 	graph := createAndValidateGraph(t, transits, "input", "output")
 	sorted, err := graph.TopologicalSort()
@@ -68,11 +68,11 @@ func TestLinearDAG(t *testing.T) {
 
 func TestComplexDAG(t *testing.T) {
 	transits := []channel.Transit{
-		channel.NewTransit("A", []string{"input"}, []string{"chan1"}),
-		channel.NewTransit("B", []string{"chan1"}, []string{"chan2", "chan3"}),
-		channel.NewTransit("C", []string{"chan2"}, []string{"chan4"}),
-		channel.NewTransit("D", []string{"chan3"}, []string{"chan4"}),
-		channel.NewTransit("E", []string{"chan4"}, []string{"output"}),
+		channel.NewTransit("A", []string{"input"}, []string{"chan1"}, nil),
+		channel.NewTransit("B", []string{"chan1"}, []string{"chan2", "chan3"}, nil),
+		channel.NewTransit("C", []string{"chan2"}, []string{"chan4"}, nil),
+		channel.NewTransit("D", []string{"chan3"}, []string{"chan4"}, nil),
+		channel.NewTransit("E", []string{"chan4"}, []string{"output"}, nil),
 	}
 	graph := createAndValidateGraph(t, transits, "input", "output")
 	sorted, err := graph.TopologicalSort()
@@ -88,10 +88,10 @@ func TestComplexDAG(t *testing.T) {
 
 func TestCycleDetection(t *testing.T) {
 	transits := []channel.Transit{
-		channel.NewTransit("A", []string{"input"}, []string{"chan1"}),
-		channel.NewTransit("B", []string{"chan1"}, []string{"chan2"}),
-		channel.NewTransit("C", []string{"chan2"}, []string{"chan3"}),
-		channel.NewTransit("D", []string{"chan3"}, []string{"chan1"}),
+		channel.NewTransit("A", []string{"input"}, []string{"chan1"}, nil),
+		channel.NewTransit("B", []string{"chan1"}, []string{"chan2"}, nil),
+		channel.NewTransit("C", []string{"chan2"}, []string{"chan3"}, nil),
+		channel.NewTransit("D", []string{"chan3"}, []string{"chan1"}, nil),
 	}
 	_, err := NewGraph("input", "output", WithIntermediateTransits(transits...))
 	if err == nil {
@@ -105,9 +105,9 @@ func TestCycleDetection(t *testing.T) {
 
 func TestDanglingIncoming(t *testing.T) {
 	transits := []channel.Transit{
-		channel.NewTransit("A", []string{"input"}, []string{"chan1"}),
-		channel.NewTransit("B", []string{"chan1"}, []string{}),
-		channel.NewTransit("C", []string{"chan2"}, []string{}), // Dangling incoming chan2
+		channel.NewTransit("A", []string{"input"}, []string{"chan1"}, nil),
+		channel.NewTransit("B", []string{"chan1"}, []string{}, nil),
+		channel.NewTransit("C", []string{"chan2"}, []string{}, nil), // Dangling incoming chan2
 	}
 	_, err := NewGraph("input", "output", WithIntermediateTransits(transits...))
 	if err == nil {
@@ -117,9 +117,9 @@ func TestDanglingIncoming(t *testing.T) {
 
 func TestDanglingOutgoing(t *testing.T) {
 	transits := []channel.Transit{
-		channel.NewTransit("A", []string{}, []string{"chan1"}),
-		channel.NewTransit("B", []string{"chan1"}, []string{}),
-		channel.NewTransit("C", []string{}, []string{"chan2"}), // Dangling outgoing chan2
+		channel.NewTransit("A", []string{}, []string{"chan1"}, nil),
+		channel.NewTransit("B", []string{"chan1"}, []string{}, nil),
+		channel.NewTransit("C", []string{}, []string{"chan2"}, nil), // Dangling outgoing chan2
 	}
 	_, err := NewGraph("input", "output", WithIntermediateTransits(transits...))
 	if err == nil {
@@ -161,9 +161,9 @@ func equalSlices(a, b []string) bool {
 
 func TestGraph_GetSourceName(t *testing.T) {
 	transits := []channel.Transit{
-		channel.NewTransit("A", []string{"input"}, []string{"chan1"}),
-		channel.NewTransit("B", []string{"chan1"}, []string{"chan2"}),
-		channel.NewTransit("C", []string{"chan2"}, []string{"output"}),
+		channel.NewTransit("A", []string{"input"}, []string{"chan1"}, nil),
+		channel.NewTransit("B", []string{"chan1"}, []string{"chan2"}, nil),
+		channel.NewTransit("C", []string{"chan2"}, []string{"output"}, nil),
 	}
 	graph := createAndValidateGraph(t, transits, "input", "output")
 	assert.Equal(t, "input", graph.GetSourceName())
@@ -171,9 +171,9 @@ func TestGraph_GetSourceName(t *testing.T) {
 
 func TestGraph_GetSinkName(t *testing.T) {
 	transits := []channel.Transit{
-		channel.NewTransit("A", []string{"input"}, []string{"chan1"}),
-		channel.NewTransit("B", []string{"chan1"}, []string{"chan2"}),
-		channel.NewTransit("C", []string{"chan2"}, []string{"output"}),
+		channel.NewTransit("A", []string{"input"}, []string{"chan1"}, nil),
+		channel.NewTransit("B", []string{"chan1"}, []string{"chan2"}, nil),
+		channel.NewTransit("C", []string{"chan2"}, []string{"output"}, nil),
 	}
 	graph := createAndValidateGraph(t, transits, "input", "output")
 	assert.Equal(t, "output", graph.GetSinkName())
