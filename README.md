@@ -25,8 +25,13 @@ relying solely on internal code packages (excluding testing requirements).
 
 Presently, the released versions encompass:
 
-- [workflow/simple](workflow/simple): Designed for describing straightforward workflows, it supports DAGs of any complexity.
-It also features logging capabilities enabling customization of transits and log events. Despite its simplicity, it adequately fulfills the requirements of most scenarios.
+- [workflow/simple](workflow/simple): Designed for describing straightforward workflows,
+it supports DAGs of any complexity. It also features logging capabilities enabling customization of transits and log events.
+Despite its simplicity, it adequately fulfills the requirements of most scenarios.
+- [workflow/standard](workflow/standard): In addition to the capabilities provided by `workflow/simple`,
+it offers more advanced features, such as the ability to execute the same workflow multiple times
+without worrying about conflicts between different executions. Each context supports execution options and execution reports.
+The workflow also supports input and output caching for each node, as well as worker pools, among other features.
 
 > In the future, more complex workflow functionalities will be introduced to cater to diverse needs.
 

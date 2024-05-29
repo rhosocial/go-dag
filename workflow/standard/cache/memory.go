@@ -9,25 +9,25 @@ import (
 	"sync"
 )
 
-// ErrKeyNotFound represents an error indicating that a key was not found in the cache.
-type ErrKeyNotFound struct {
+// KeyNotFoundError represents an error indicating that a key was not found in the cache.
+type KeyNotFoundError struct {
 	key string
 	error
 }
 
-// Error returns the error message for ErrKeyNotFound.
-func (e ErrKeyNotFound) Error() string {
+// Error returns the error message for KeyNotFoundError.
+func (e KeyNotFoundError) Error() string {
 	return fmt.Sprintf("key %s not found in cache", e.key)
 }
 
-// ErrKeyExpired represents an error indicating that a key has expired in the cache.
-type ErrKeyExpired struct {
+// KeyExpiredError represents an error indicating that a key has expired in the cache.
+type KeyExpiredError struct {
 	key string
 	error
 }
 
-// Error returns the error message for ErrKeyExpired.
-func (e ErrKeyExpired) Error() string {
+// Error returns the error message for KeyExpiredError.
+func (e KeyExpiredError) Error() string {
 	return fmt.Sprintf("key %s has expired", e.key)
 }
 
@@ -63,13 +63,13 @@ func (c *MemoryCache) Get(key KeyGetter) (any, error) {
 	keyGetter := key
 	item, ok := c.items[keyGetter.GetKey()]
 	if !ok {
-		return nil, ErrKeyNotFound{key: keyGetter.GetKey()}
+		return nil, KeyNotFoundError{key: keyGetter.GetKey()}
 	}
 	if !item.Expired() {
 		return item.Value(), nil
 	}
 	defer delete(c.items, keyGetter.GetKey())
-	return nil, ErrKeyExpired{key: keyGetter.GetKey()}
+	return nil, KeyExpiredError{key: keyGetter.GetKey()}
 }
 
 // Set sets the value associated with the given key in the cache.

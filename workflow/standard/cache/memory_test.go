@@ -32,7 +32,7 @@ func TestMemoryCache_SetAndGet(t *testing.T) {
 	assert.Empty(t, c.items)
 
 	result, err := c.Get(MemoryCacheKeyGetter{key1: 1, key2: 2})
-	assert.ErrorAs(t, err, &ErrKeyNotFound{})
+	assert.ErrorAs(t, err, &KeyNotFoundError{})
 	assert.Nil(t, result)
 
 	err = c.Set(MemoryCacheKeyGetter{key1: 1, key2: 2}, int64(1))
@@ -69,8 +69,8 @@ func TestMemoryCache_Expiration(t *testing.T) {
 	assert.Len(t, c.items, 1)
 
 	result, err := c.Get(MemoryCacheKeyGetter{key1: 1, key2: 2})
-	assert.ErrorAs(t, err, &ErrKeyExpired{key: MemoryCacheKeyGetter{key1: 1, key2: 2}.GetKey()})
-	assert.Equal(t, err.Error(), ErrKeyExpired{key: MemoryCacheKeyGetter{key1: 1, key2: 2}.GetKey()}.Error())
+	assert.ErrorAs(t, err, &KeyExpiredError{key: MemoryCacheKeyGetter{key1: 1, key2: 2}.GetKey()})
+	assert.Equal(t, err.Error(), KeyExpiredError{key: MemoryCacheKeyGetter{key1: 1, key2: 2}.GetKey()}.Error())
 	assert.Nil(t, result)
 	assert.Len(t, c.items, 0)
 
@@ -87,7 +87,7 @@ func TestMemoryCache_Expiration(t *testing.T) {
 	assert.Len(t, c.items, 1)
 
 	result, err = c.Get(MemoryCacheKeyGetter{key1: 1, key2: 2})
-	assert.ErrorAs(t, err, &ErrKeyExpired{})
+	assert.ErrorAs(t, err, &KeyExpiredError{})
 	assert.Nil(t, result)
 	assert.Len(t, c.items, 0)
 }
@@ -108,7 +108,7 @@ func TestMemoryCache_Delete(t *testing.T) {
 	time.Sleep(time.Millisecond)
 
 	result, err := c.Get(MemoryCacheKeyGetter{key1: 1, key2: 2})
-	assert.ErrorIs(t, err, ErrKeyExpired{key: MemoryCacheKeyGetter{key1: 1, key2: 2}.GetKey()})
+	assert.ErrorIs(t, err, KeyExpiredError{key: MemoryCacheKeyGetter{key1: 1, key2: 2}.GetKey()})
 	assert.Nil(t, result)
 	assert.Len(t, c.items, 0)
 }
@@ -124,8 +124,8 @@ func TestMemoryCache_Clear(t *testing.T) {
 	assert.Len(t, c.items, 0)
 
 	result, err := c.Get(MemoryCacheKeyGetter{key1: 1, key2: 2})
-	assert.ErrorIs(t, err, ErrKeyNotFound{key: MemoryCacheKeyGetter{key1: 1, key2: 2}.GetKey()})
-	assert.Equal(t, err.Error(), ErrKeyNotFound{key: MemoryCacheKeyGetter{key1: 1, key2: 2}.GetKey()}.Error())
+	assert.ErrorIs(t, err, KeyNotFoundError{key: MemoryCacheKeyGetter{key1: 1, key2: 2}.GetKey()})
+	assert.Equal(t, err.Error(), KeyNotFoundError{key: MemoryCacheKeyGetter{key1: 1, key2: 2}.GetKey()}.Error())
 	assert.Nil(t, result)
 	assert.Len(t, c.items, 0)
 }

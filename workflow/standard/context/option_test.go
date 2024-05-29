@@ -83,7 +83,7 @@ func TestNewOptionsWithTransits(t *testing.T) {
 	assert.Equal(t, "123", result)
 
 	transit, err = options.GetTransit("t2", "abc")
-	assert.ErrorAs(t, err, &cache.ErrKeyNotFound{})
+	assert.ErrorAs(t, err, &cache.KeyNotFoundError{})
 
 	options, err = NewOptions(WithTransitsOptionsError())
 	assert.Equal(t, "abc", err.Error())
@@ -94,6 +94,6 @@ func TestNewOptionsWithEmpty(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, options)
 	transit, err := options.GetTransit("t1", "abc")
-	assert.ErrorAs(t, err, &cache.ErrKeyNotFound{})
+	assert.ErrorAs(t, err, &cache.KeyNotFoundError{})
 	assert.Nil(t, transit)
 }
