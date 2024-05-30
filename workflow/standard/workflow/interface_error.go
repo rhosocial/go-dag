@@ -4,6 +4,8 @@
 
 package workflow
 
+import "fmt"
+
 type GraphNilError struct {
 	error
 }
@@ -18,4 +20,13 @@ type GraphNotSpecifiedError struct {
 
 func (err GraphNotSpecifiedError) Error() string {
 	return "graph is not specified"
+}
+
+type ChannelNotFoundError struct {
+	name string
+	error
+}
+
+func (err ChannelNotFoundError) Error() string {
+	return fmt.Sprintf("channel %s not found", err.name)
 }

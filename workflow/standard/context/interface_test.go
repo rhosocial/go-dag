@@ -72,12 +72,20 @@ type MockEventManager struct {
 func (o MockEventManager) Listen(ctx context.Context) {}
 
 type MockContext struct {
-	Interface
+	Context
 }
 
 func (m MockContext) Cancel(cause error) {}
 
 func (m MockContext) GetContext() context.Context { return nil }
+
+func (m MockContext) GetIdentifier() IdentifierInterface { return nil }
+
+func (m MockContext) GetOptions() OptionsInterface { return nil }
+
+func (m MockContext) GetReports() ReportsInterface { return nil }
+
+func (m MockContext) GetEventManager() EventManagerInterface { return nil }
 
 // Ensure MockIdentifier implements IdentifierInterface
 var _ IdentifierInterface = (*MockIdentifier)(nil)
@@ -88,12 +96,12 @@ var _ OptionsInterface = (*MockOptions)(nil)
 // Ensure MockEventManager implements EventManagerInterface
 var _ EventManagerInterface = (*MockEventManager)(nil)
 
-var _ Interface = (*MockContext)(nil)
+var _ Context = (*MockContext)(nil)
 
 // Mock CancelCauseFunc
 func MockCancelCauseFunc(cause error) {}
 
-// Test creating a new Context with different options
+// Test creating a new BaseContext with different options
 func TestNewContext(t *testing.T) {
 	ctx, cancel := context.WithCancelCause(context.Background())
 
@@ -109,7 +117,7 @@ func TestNewContext(t *testing.T) {
 	c2, err := NewContext(WithIdentifier(mockIdentifier))
 	assert.NoError(t, err)
 	assert.NotNil(t, c2)
-	assert.Equal(t, mockIdentifier, c2.Identifier)
+	assert.Equal(t, mockIdentifier, c2.identifier)
 
 	// Test with WithOptions option
 	mockOptions := &MockOptions{}
@@ -144,7 +152,7 @@ func TestNewContext(t *testing.T) {
 	assert.NotNil(t, c)
 	assert.Equal(t, ctx, c.context)
 	assert.Equal(t, ctx, c.GetContext())
-	assert.Equal(t, mockIdentifier, c.Identifier)
+	assert.Equal(t, mockIdentifier, c.identifier)
 	assert.Equal(t, mockOptions, c.options)
 	assert.Equal(t, mockReports, c.reports)
 	assert.Equal(t, mockEventManager, c.eventManager)
@@ -172,7 +180,7 @@ func TestContextCancel(t *testing.T) {
 }
 
 func WithContextError(context context.Context, cancel context.CancelCauseFunc) Option {
-	return func(c *Context) error {
+	return func(c *BaseContext) error {
 		return errors.New("test creating new context with error")
 	}
 }
@@ -184,4 +192,31 @@ func TestNewContextWithError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, "test creating new context with error", err.Error())
 	assert.Nil(t, c)
+}
+
+func TestNewContextWithNilCancelFunc(t *testing.T) {
+	ctx, _ := context.WithCancelCause(context.Background())
+	c, err := NewContext(WithContext(ctx, nil))
+	assert.ErrorIs(t, err, CancelFuncNilError{})
+	assert.Nil(t, c)
+	assert.Equal(t, err.Error(), "cancel function is nil")
+}
+
+func TestBaseContext_Getter(t *testing.T) {
+	ctx, _ := NewContext()
+	t.Run("GetContext", func(t *testing.T) {
+		ctx.GetContext()
+	})
+	t.Run("GetIdentifier", func(t *testing.T) {
+		ctx.GetIdentifier()
+	})
+	t.Run("GetOptions", func(t *testing.T) {
+		ctx.GetOptions()
+	})
+	t.Run("GetReports", func(t *testing.T) {
+		ctx.GetReports()
+	})
+	t.Run("GetEventManager", func(t *testing.T) {
+		ctx.GetEventManager()
+	})
 }

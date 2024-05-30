@@ -8,37 +8,41 @@ package context
 
 import "context"
 
-// Interface defines the methods that a context implementation must satisfy.
-type Interface interface {
+// Context defines the methods that a context implementation must satisfy.
+type Context interface {
 	// Cancel cancels the context with the provided error cause.
 	Cancel(cause error)
 	GetContext() context.Context
+	GetIdentifier() IdentifierInterface
+	GetOptions() OptionsInterface
+	GetReports() ReportsInterface
+	GetEventManager() EventManagerInterface
 }
 
-// Context represents a context instance that encapsulates a context.Context and
+// BaseContext represents a context instance that encapsulates a context.BaseContext and
 // additional functionalities for managing cancellations and request-scoped values.
 //
-// Context is used to represent the context of a single execution. In addition to
-// holding the context and cancel function, it carries the Identifier for the execution,
-// all configuration options, and the post-execution reports. This Context is used to
+// BaseContext is used to represent the context of a single execution. In addition to
+// holding the context and cancel function, it carries the identifier for the execution,
+// all configuration options, and the post-execution reports. This BaseContext is used to
 // distinguish between different executions fed into the same workflow.
 //
 // The eventManager field provides functionality for handling events sent by workflow or transit workers
 // and dispatching them to registered subscribers. This enables asynchronous communication and event-driven
 // processing within the workflow. If eventManager is not specified, events will not be listened to or sent
 // to any subscribers for this execution, making it an optional field depending on the needs of the workflow.
-type Context struct {
-	// context holds the standard context.Context instance.
+type BaseContext struct {
+	// context holds the standard context.BaseContext instance.
 	// This field is exported to the ctx parameter passed to the worker in the transit.
 	context context.Context
 
 	// cancel holds the cancel function that can cancel the context with a specific cause.
 	cancel context.CancelCauseFunc
 
-	Interface
+	Context
 
-	// Identifier holds an instance of IdentifierInterface for managing unique identifiers.
-	Identifier IdentifierInterface
+	// identifier holds an instance of IdentifierInterface for managing unique identifiers.
+	identifier IdentifierInterface
 
 	// options holds an instance of OptionsInterface for storing configuration options.
 	//
@@ -71,18 +75,26 @@ type Context struct {
 }
 
 // Cancel cancels the context with the provided error cause.
-func (c *Context) Cancel(cause error) {
+func (c *BaseContext) Cancel(cause error) {
 	c.cancel(cause)
 }
 
-func (c *Context) GetContext() context.Context { return c.context }
+func (c *BaseContext) GetContext() context.Context { return c.context }
+
+func (c *BaseContext) GetIdentifier() IdentifierInterface { return c.identifier }
+
+func (c *BaseContext) GetOptions() OptionsInterface { return c.options }
+
+func (c *BaseContext) GetReports() ReportsInterface { return c.reports }
+
+func (c *BaseContext) GetEventManager() EventManagerInterface { return c.eventManager }
 
 // Option is a function type for defining context configuration options.
-type Option func(*Context) error
+type Option func(*BaseContext) error
 
 // NewContext creates a new context instance with the given configuration options.
-func NewContext(options ...Option) (*Context, error) {
-	c := &Context{}
+func NewContext(options ...Option) (*BaseContext, error) {
+	c := &BaseContext{}
 	for _, option := range options {
 		err := option(c)
 		if err != nil {
@@ -92,26 +104,35 @@ func NewContext(options ...Option) (*Context, error) {
 	return c, nil
 }
 
-// WithContext sets the context.Context and cancel function for the context.
+type CancelFuncNilError struct {
+	error
+}
+
+func (c CancelFuncNilError) Error() string { return "cancel function is nil" }
+
+// WithContext sets the context.BaseContext and cancel function for the context.
 func WithContext(context context.Context, cancel context.CancelCauseFunc) Option {
-	return func(c *Context) error {
+	return func(c *BaseContext) error {
+		if cancel == nil {
+			return CancelFuncNilError{}
+		}
 		c.context = context
 		c.cancel = cancel
 		return nil
 	}
 }
 
-// WithIdentifier sets the Identifier for the context.
+// WithIdentifier sets the identifier for the context.
 func WithIdentifier(identifier IdentifierInterface) Option {
-	return func(context *Context) error {
-		context.Identifier = identifier
+	return func(context *BaseContext) error {
+		context.identifier = identifier
 		return nil
 	}
 }
 
 // WithOptions sets the options for the context.
 func WithOptions(options OptionsInterface) Option {
-	return func(context *Context) error {
+	return func(context *BaseContext) error {
 		context.options = options
 		return nil
 	}
@@ -119,7 +140,7 @@ func WithOptions(options OptionsInterface) Option {
 
 // WithReports sets the reports for the context.
 func WithReports(reports ReportsInterface) Option {
-	return func(context *Context) error {
+	return func(context *BaseContext) error {
 		context.reports = reports
 		return nil
 	}
@@ -137,7 +158,7 @@ func WithReports(reports ReportsInterface) Option {
 // in your application. Failure to do so will result in the workflow and transit workers being
 // blocked when they attempt to send data to the event channel.
 func WithEventManager(eventManager EventManagerInterface) Option {
-	return func(context *Context) error {
+	return func(context *BaseContext) error {
 		context.eventManager = eventManager
 		return nil
 	}

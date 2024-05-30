@@ -15,13 +15,13 @@ import (
 
 func TestNewContext(t *testing.T) {
 	baseCtx, _ := context.NewContext(context.WithContext(baseContext.WithCancelCause(baseContext.Background())))
-	ctx := Context{
-		Context: *baseCtx,
+	ctx := workflowContext{
+		BaseContext: *baseCtx,
 	}
 	t.Log(ctx)
 }
 
-type ContextError = context.Context
+type ContextError = context.BaseContext
 
 func WithContextError(context baseContext.Context, cancel baseContext.CancelCauseFunc) context.Option {
 	return func(c *ContextError) error {
@@ -31,13 +31,25 @@ func WithContextError(context baseContext.Context, cancel baseContext.CancelCaus
 
 func TestNewContextWithError(t *testing.T) {
 	ctx, cancel := baseContext.WithCancelCause(baseContext.Background())
-	c, err := NewContext(WithContextError(ctx, cancel))
+	c, err := NewContext("input", "output", WithContextError(ctx, cancel))
 	assert.Error(t, err)
 	assert.Equal(t, "test creating new context with error", err.Error())
 	assert.Nil(t, c)
 }
 
-func TestChannelNotInitializedError_Error(t *testing.T) {
-	err := ChannelNotInitializedError{}
-	assert.Equal(t, "channel not initialized", err.Error())
+func TestWorkflowContext_GetChannel(t *testing.T) {
+	t.Run("channel not initialized", func(t *testing.T) {
+		ctx := workflowContext{}
+		ch, exist := ctx.GetChannel("input")
+		assert.Nil(t, ch)
+		assert.False(t, exist)
+	})
+	t.Run("channel initialized", func(t *testing.T) {
+		ctx := workflowContext{
+			channels: make(map[string]chan any),
+		}
+		ch, exist := ctx.GetChannel("input")
+		assert.Nil(t, ch)
+		assert.False(t, exist)
+	})
 }
