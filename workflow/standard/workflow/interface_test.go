@@ -318,16 +318,21 @@ func TestWorkflow_Run(t *testing.T) {
 		}
 
 		var err1, err2 error
+		signal1 := make(chan struct{}, 1)
+		signal2 := make(chan struct{}, 1)
 		go func(err *error) {
 			_, *err = workflow.Run(baseContext.Background(), struct{}{})
+			signal1 <- struct{}{}
 		}(&err1)
 		go func(err *error) {
 			_, *err = workflow.Run(baseContext.Background(), struct{}{})
+			signal2 <- struct{}{}
 		}(&err2)
 		time.Sleep(time.Millisecond * 10)
 		workflow.Close()
-		time.Sleep(time.Millisecond)
+		<-signal1
 		assert.ErrorIs(t, err1, baseContext.Canceled)
+		<-signal2
 		assert.ErrorIs(t, err2, baseContext.Canceled)
 	})
 	t.Run("two parallel tasks, run with context, error occurred", func(t *testing.T) {
@@ -345,11 +350,15 @@ func TestWorkflow_Run(t *testing.T) {
 		ctx1, _ := BuildCustomContext()
 		ctx2, _ := BuildCustomContext()
 		var err1, err2 error
+		signal1 := make(chan struct{}, 1)
+		signal2 := make(chan struct{}, 1)
 		go func(ctx *Context, err *error) {
 			_, *err = workflow.RunWithContext(ctx, struct{}{})
+			signal1 <- struct{}{}
 		}(ctx1, &err1)
 		go func(ctx *Context, err *error) {
 			_, *err = workflow.RunWithContext(ctx, struct{}{})
+			signal2 <- struct{}{}
 		}(ctx2, &err2)
 		time.Sleep(time.Millisecond * 10)
 
@@ -362,12 +371,14 @@ func TestWorkflow_Run(t *testing.T) {
 		workflow.Close()
 		time.Sleep(time.Millisecond)
 
+		<-signal1
 		_, ok = workflow.ctxMap.Load(ctx1.Identifier.GetID())
 		assert.False(t, ok)
+		assert.ErrorIs(t, err1, baseContext.Canceled)
 
+		<-signal2
 		_, ok = workflow.ctxMap.Load(ctx2.Identifier.GetID())
 		assert.False(t, ok)
-		assert.ErrorIs(t, err1, baseContext.Canceled)
 		assert.ErrorIs(t, err2, baseContext.Canceled)
 	})
 }
