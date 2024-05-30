@@ -18,6 +18,7 @@ import (
 
 type MockWorkflow struct {
 	Interface[struct{}, struct{}]
+	RunAsyncInterface[struct{}, struct{}]
 }
 
 func (m *MockWorkflow) BuildWorkflowInput(ctx *Context, result any, inputs ...string) error {
@@ -34,12 +35,17 @@ func (m *MockWorkflow) BuildWorkflow(ctx *Context) error {
 	return nil
 }
 
-func (m *MockWorkflow) RunWithContext(execCtx *Context, input struct{}, output chan<- struct{}) error {
-	return nil
+func (m *MockWorkflow) RunAsyncWithContext(execCtx *Context, input struct{}, output chan<- struct{}, err chan<- error) {
 }
 
-func (m *MockWorkflow) Run(ctx baseContext.Context, input struct{}, output chan<- struct{}) error {
-	return nil
+func (m *MockWorkflow) RunAsync(ctx baseContext.Context, input struct{}, output chan<- struct{}, err chan<- error) {
+}
+
+func (m *MockWorkflow) RunWithContext(execCtx *Context, input struct{}) (*struct{}, error) {
+	return nil, nil
+}
+func (m *MockWorkflow) Run(ctx baseContext.Context, input struct{}) (*struct{}, error) {
+	return nil, nil
 }
 
 func (m *MockWorkflow) Close() {}
@@ -87,10 +93,11 @@ func TestNewWorkflowWithGraphAndTopologicalSort(t *testing.T) {
 		return
 	}
 
-	output := make(chan struct{})
-	go workflow.Run(baseContext.Background(), struct{}{}, output)
+	output := make(chan struct{}, 1)
+	signal := make(chan error)
+	go workflow.RunAsync(baseContext.Background(), struct{}{}, output, signal)
 	log.Println("workflow run")
-	log.Println("result:", <-output)
+	log.Printf("result: %v, err: %v\n", <-output, <-signal)
 }
 
 func TestWorkflowBuildWorkflowInput(t *testing.T) {
@@ -198,12 +205,18 @@ func TestWorkflowClose(t *testing.T) {
 			return
 		}
 
-		output1 := make(chan struct{}, 1)
-		output2 := make(chan struct{}, 1)
 		ctx1, _ := BuildCustomContext()
 		ctx2, _ := BuildCustomContext()
-		go workflow.RunWithContext(ctx1, struct{}{}, output1)
-		go workflow.RunWithContext(ctx2, struct{}{}, output2)
+		err1 := make(chan error, 1)
+		err2 := make(chan error, 1)
+		go func() {
+			_, err := workflow.RunWithContext(ctx1, struct{}{})
+			err1 <- err
+		}()
+		go func() {
+			_, err := workflow.RunWithContext(ctx2, struct{}{})
+			err2 <- err
+		}()
 		time.Sleep(time.Millisecond)
 
 		_, ok := workflow.ctxMap.Load(ctx1.Identifier.GetID())
@@ -212,14 +225,19 @@ func TestWorkflowClose(t *testing.T) {
 		_, ok = workflow.ctxMap.Load(ctx2.Identifier.GetID())
 		assert.True(t, ok)
 		time.Sleep(time.Millisecond)
+		signal := make(chan struct{})
+		go func() {
+			<-err1
+			_, ok = workflow.ctxMap.Load(ctx1.Identifier.GetID())
+			assert.False(t, ok)
+
+			<-err2
+			_, ok = workflow.ctxMap.Load(ctx2.Identifier.GetID())
+			assert.False(t, ok)
+			signal <- struct{}{}
+		}()
 		workflow.Close()
-		time.Sleep(time.Millisecond)
-
-		_, ok = workflow.ctxMap.Load(ctx1.Identifier.GetID())
-		assert.False(t, ok)
-
-		_, ok = workflow.ctxMap.Load(ctx2.Identifier.GetID())
-		assert.False(t, ok)
+		<-signal
 	})
 
 }
@@ -251,5 +269,105 @@ func TestWorkflow_BuildChannels(t *testing.T) {
 
 		wf.BuildChannels(ctx)
 		assert.NotNil(t, ctx.channels)
+	})
+}
+
+func TestWorkflow_Run(t *testing.T) {
+	t.Run("normal", func(t *testing.T) {
+		graph, err := BuildGraph(workerSleepMillisecond)
+		if err != nil {
+			t.Fatal(err)
+			return
+		}
+		workflow, err := NewWorkflow[struct{}, struct{}](WithGraph[struct{}, struct{}](graph))
+		if err != nil {
+			t.Fatal(err)
+			return
+		}
+		output, err := workflow.Run(baseContext.Background(), struct{}{})
+		assert.NoError(t, err)
+		assert.Equal(t, struct{}{}, *output)
+	})
+	t.Run("run with context", func(t *testing.T) {
+		graph, err := BuildGraph(workerSleepMillisecond)
+		if err != nil {
+			t.Fatal(err)
+			return
+		}
+		workflow, err := NewWorkflow[struct{}, struct{}](WithGraph[struct{}, struct{}](graph))
+		if err != nil {
+			t.Fatal(err)
+			return
+		}
+		ctx, _ := BuildCustomContext()
+		t.Log(ctx.Identifier.GetID())
+		output, err := workflow.RunWithContext(ctx, struct{}{})
+		assert.NoError(t, err)
+		assert.Equal(t, struct{}{}, *output)
+	})
+	t.Run("two parallel tasks, error occurred", func(t *testing.T) {
+		graph, err := BuildGraph(workerSleepSecond)
+		if err != nil {
+			t.Fatal(err)
+			return
+		}
+		workflow, err := NewWorkflow[struct{}, struct{}](WithGraph[struct{}, struct{}](graph))
+		if err != nil {
+			t.Fatal(err)
+			return
+		}
+
+		var err1, err2 error
+		go func(err *error) {
+			_, *err = workflow.Run(baseContext.Background(), struct{}{})
+		}(&err1)
+		go func(err *error) {
+			_, *err = workflow.Run(baseContext.Background(), struct{}{})
+		}(&err2)
+		time.Sleep(time.Millisecond * 10)
+		workflow.Close()
+		time.Sleep(time.Millisecond)
+		assert.ErrorIs(t, err1, baseContext.Canceled)
+		assert.ErrorIs(t, err2, baseContext.Canceled)
+	})
+	t.Run("two parallel tasks, run with context, error occurred", func(t *testing.T) {
+		graph, err := BuildGraph(workerSleepSecond)
+		if err != nil {
+			t.Fatal(err)
+			return
+		}
+		workflow, err := NewWorkflow[struct{}, struct{}](WithGraph[struct{}, struct{}](graph))
+		if err != nil {
+			t.Fatal(err)
+			return
+		}
+
+		ctx1, _ := BuildCustomContext()
+		ctx2, _ := BuildCustomContext()
+		var err1, err2 error
+		go func(ctx *Context, err *error) {
+			_, *err = workflow.RunWithContext(ctx, struct{}{})
+		}(ctx1, &err1)
+		go func(ctx *Context, err *error) {
+			_, *err = workflow.RunWithContext(ctx, struct{}{})
+		}(ctx2, &err2)
+		time.Sleep(time.Millisecond * 10)
+
+		_, ok := workflow.ctxMap.Load(ctx1.Identifier.GetID())
+		assert.True(t, ok)
+
+		_, ok = workflow.ctxMap.Load(ctx2.Identifier.GetID())
+		assert.True(t, ok)
+		time.Sleep(time.Millisecond)
+		workflow.Close()
+		time.Sleep(time.Millisecond)
+
+		_, ok = workflow.ctxMap.Load(ctx1.Identifier.GetID())
+		assert.False(t, ok)
+
+		_, ok = workflow.ctxMap.Load(ctx2.Identifier.GetID())
+		assert.False(t, ok)
+		assert.ErrorIs(t, err1, baseContext.Canceled)
+		assert.ErrorIs(t, err2, baseContext.Canceled)
 	})
 }

@@ -16,6 +16,14 @@ import (
 	"github.com/rhosocial/go-dag/workflow/standard/transit"
 )
 
+// RunAsyncInterface defines asynchronous execution methods for a workflow.
+type RunAsyncInterface[TInput, TOutput any] interface {
+	// RunAsyncWithContext executes a workflow asynchronously with a custom context, input, and output channel.
+	RunAsyncWithContext(execCtx *Context, input TInput, output chan<- TOutput, err chan<- error)
+	// RunAsync executes a workflow asynchronously with the given input and sends the result to the output channel.
+	RunAsync(ctx baseContext.Context, input TInput, output chan<- TOutput, err chan<- error)
+}
+
 // Interface defines the methods required for a workflow.
 type Interface[TInput, TOutput any] interface {
 	// BuildWorkflowInput initializes the input channels for the workflow.
@@ -27,9 +35,9 @@ type Interface[TInput, TOutput any] interface {
 	// BuildChannels initializes the channels required for the workflow.
 	BuildChannels(ctx *Context)
 	// RunWithContext executes the workflow with a custom context, input, and output channel.
-	RunWithContext(execCtx *Context, input TInput, output chan<- TOutput) error
+	RunWithContext(execCtx *Context, input TInput) (*TOutput, error)
 	// Run executes the workflow with the given input and sends the result to the output channel.
-	Run(ctx baseContext.Context, input TInput, output chan<- TOutput) error
+	Run(ctx baseContext.Context, input TInput) (*TOutput, error)
 	// Close cleans up the workflow by cancelling all contexts.
 	Close()
 }
@@ -37,6 +45,7 @@ type Interface[TInput, TOutput any] interface {
 // Workflow represents a workflow with input type TInput and output type TOutput.
 type Workflow[TInput, TOutput any] struct {
 	Interface[TInput, TOutput]
+	RunAsyncInterface[TInput, TOutput]
 	cache  cache.Interface        // Cache for storing intermediate results.
 	graph  transit.GraphInterface // The DAG representing the workflow.
 	ctxMap sync.Map               // Map for storing execution contexts.
@@ -176,17 +185,16 @@ func (wf *Workflow[TInput, TOutput]) BuildChannels(ctx *Context) {
 	}
 }
 
-// RunWithContext executes the workflow with the given input and sends the result to the output channel using a custom context.
-func (wf *Workflow[TInput, TOutput]) RunWithContext(execCtx *Context, input TInput, output chan<- TOutput) error {
+// RunAsyncWithContext executes a workflow asynchronously with a custom context, input, and output channel.
+func (wf *Workflow[TInput, TOutput]) RunAsyncWithContext(execCtx *Context, input TInput, output chan<- TOutput, err chan<- error) {
 	// Build channels for the workflow
 	wf.BuildChannels(execCtx)
-
-	if err := wf.BuildWorkflow(execCtx); err != nil {
-		return err
-	}
+	// This method does not return an error.
+	_ = wf.BuildWorkflow(execCtx)
 	// Store the context in the map
 	wf.ctxMap.Store(execCtx.Identifier.GetID(), execCtx)
 	// Clean up context map
+	// TODO: Before clearing, the current execution context needs to be moved to the specified location.
 	defer wf.ctxMap.Delete(execCtx.Identifier.GetID())
 
 	// Handle output
@@ -213,15 +221,29 @@ func (wf *Workflow[TInput, TOutput]) RunWithContext(execCtx *Context, input TInp
 
 	// Check if context was cancelled due to an error
 	if execCtx.GetContext().Err() != nil {
-		return execCtx.GetContext().Err()
+		err <- execCtx.GetContext().Err()
+		return
 	}
 
 	output <- *results
-	return nil
+	err <- nil
 }
 
-// Run executes the workflow with the given input and sends the result to the output channel.
-func (wf *Workflow[TInput, TOutput]) Run(ctx baseContext.Context, input TInput, output chan<- TOutput) error {
+// RunWithContext executes the workflow with the given input and sends the result to the output channel using a custom context.
+func (wf *Workflow[TInput, TOutput]) RunWithContext(execCtx *Context, input TInput) (*TOutput, error) {
+	output := make(chan TOutput, 1)
+	signal := make(chan error)
+	go wf.RunAsyncWithContext(execCtx, input, output, signal)
+	err := <-signal
+	if err != nil {
+		return nil, err
+	}
+	result := <-output
+	return &result, nil
+}
+
+// RunAsync executes a workflow asynchronously with the given input and sends the result to the output channel.
+func (wf *Workflow[TInput, TOutput]) RunAsync(ctx baseContext.Context, input TInput, output chan<- TOutput, err chan<- error) {
 	// Generate a new identifier for this run
 	identifier := context.NewIdentifier(nil)
 
@@ -232,7 +254,20 @@ func (wf *Workflow[TInput, TOutput]) Run(ctx baseContext.Context, input TInput, 
 		context.WithIdentifier(identifier),
 	)
 	// Since the WithContext and WithIdentifier methods do not return errors, the error judgment is ignored here.
-	return wf.RunWithContext(execCtx, input, output)
+	wf.RunAsyncWithContext(execCtx, input, output, err)
+}
+
+// Run executes the workflow with the given input and sends the result to the output channel.
+func (wf *Workflow[TInput, TOutput]) Run(ctx baseContext.Context, input TInput) (*TOutput, error) {
+	output := make(chan TOutput, 1)
+	signal := make(chan error)
+	go wf.RunAsync(ctx, input, output, signal)
+	err := <-signal
+	if err != nil {
+		return nil, err
+	}
+	result := <-output
+	return &result, nil
 }
 
 // Close cleans up the workflow by cancelling all contexts.

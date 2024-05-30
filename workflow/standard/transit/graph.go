@@ -20,7 +20,6 @@ const (
 type GraphInterface interface {
 	channel.DAG
 	GetTransit() map[string]channel.Transit
-	GetTransitSlice() *[]channel.Transit
 }
 
 // Graph represents the transit graph structure,
@@ -55,14 +54,6 @@ func (g *Graph) GetTransit() map[string]channel.Transit {
 	return g.transits
 }
 
-func (g *Graph) GetTransitSlice() *[]channel.Transit {
-	s := make([]channel.Transit, 0)
-	for _, t := range g.transits {
-		s = append(s, t)
-	}
-	return &s
-}
-
 // Option is a type for specifying options for creating a Transit.
 type Option func(graph *Graph) error
 
@@ -83,7 +74,11 @@ func NewGraph(input, output string, options ...Option) (GraphInterface, error) {
 	outputTransit := channel.NewTransit(OutputNodeName, []string{output}, []string{}, nil)
 
 	// Build graph from transits
-	g, err := channel.BuildGraphFromTransits(InputNodeName, OutputNodeName, append(*graph.GetTransitSlice(), inputTransit, outputTransit)...)
+	s := make([]channel.Transit, 0, len(graph.transits))
+	for _, t := range graph.transits {
+		s = append(s, t)
+	}
+	g, err := channel.BuildGraphFromTransits(InputNodeName, OutputNodeName, append(s, inputTransit, outputTransit)...)
 	if err != nil {
 		return nil, err
 	}
