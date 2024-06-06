@@ -25,28 +25,8 @@ type GraphInterface interface {
 // Graph represents the transit graph structure,
 // composed of a channel.DAG instance and a slice of channel.Transit.
 type Graph struct {
-	graph    channel.DAG
+	channel.DAG
 	transits map[string]channel.Transit
-}
-
-// GetSourceName returns the name of the source node in the transit graph.
-func (g *Graph) GetSourceName() string {
-	return g.graph.GetSourceName()
-}
-
-// GetSinkName returns the name of the sink node in the transit graph.
-func (g *Graph) GetSinkName() string {
-	return g.graph.GetSinkName()
-}
-
-// HasCycle checks if the transit graph contains a cycle.
-func (g *Graph) HasCycle() error {
-	return g.graph.HasCycle()
-}
-
-// TopologicalSort returns all possible topological sorts of the transit graph.
-func (g *Graph) TopologicalSort() ([][]string, error) {
-	return g.graph.TopologicalSort()
 }
 
 // GetTransit returns the transits attached to the transit graph.
@@ -82,7 +62,7 @@ func NewGraph(input, output string, options ...Option) (GraphInterface, error) {
 	if err != nil {
 		return nil, err
 	}
-	graph.graph = g
+	graph.DAG = g
 
 	return graph, nil
 }

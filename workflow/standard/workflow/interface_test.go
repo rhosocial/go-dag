@@ -7,10 +7,12 @@ package workflow
 import (
 	baseContext "context"
 	"errors"
+	"fmt"
 	"log"
 	"testing"
 	"time"
 
+	"github.com/rhosocial/go-dag/workflow/standard/cache"
 	"github.com/rhosocial/go-dag/workflow/standard/channel"
 	"github.com/rhosocial/go-dag/workflow/standard/context"
 	"github.com/rhosocial/go-dag/workflow/standard/transit"
@@ -350,4 +352,59 @@ func TestWorkflow_processTransit(t *testing.T) {
 		transit := channel.NewTransit("transit", []string{"input"}, []string{"output"}, nil)
 		workflow.processTransit(ctx, transit.GetName(), transit)
 	})
+}
+
+type TestKeyGetterFunc struct {
+	fn KeyGetterFunc
+	KeyGetter
+}
+
+func (t TestKeyGetterFunc) GetKeyGetterFunc() KeyGetterFunc {
+	return t.fn
+}
+
+type TestKeyGetter struct {
+	inputs []any
+	cache.KeyGetter
+}
+
+func (t TestKeyGetter) GetKey() string {
+	return fmt.Sprintf("%v", t.inputs)
+}
+
+var keyFn = TestKeyGetterFunc{
+	fn: func(a ...any) cache.KeyGetter {
+		return TestKeyGetter{inputs: a}
+	},
+}
+
+func BuildGraphWithCache(worker channel.WorkerFunc) (transit.GraphInterface, error) {
+	return transit.NewGraph("input", "output", transit.WithIntermediateTransits(
+		channel.NewTransit("t1", []string{"input"}, []string{"ch11", "ch12"}, worker),
+		NewTransit("t21", []string{"ch11"}, []string{"ch21"}, worker, TransitWithCacheKeyGetter(keyFn), TransitWithCache(cache.NewMemoryCache())),
+		NewTransit("t22", []string{"ch12"}, []string{"ch22"}, worker, TransitWithCacheKeyGetter(keyFn)),
+		channel.NewTransit("t3", []string{"ch21", "ch22"}, []string{"output"}, worker),
+	))
+}
+
+func TestNewWorkflowWithCache(t *testing.T) {
+	graph, err := BuildGraphWithCache(workerSleepMillisecond)
+	if err != nil {
+		t.Fatal(err)
+		return
+	}
+	workflow, err := NewWorkflow[string, string](
+		WithGraph[string, string](graph),
+	)
+	if err != nil {
+		t.Fatal(err)
+		return
+	}
+
+	output := make(chan string, 1)
+	signal := make(chan error)
+	go workflow.RunAsync(baseContext.Background(), "transit_with_cache", output, signal)
+	log.Println("workflow run")
+	log.Printf("result: %v, err: %v\n", <-output, <-signal)
+	log.Println(workflow.graph.TopologicalSort())
 }

@@ -7,6 +7,7 @@ package workflow
 
 import (
 	baseContext "context"
+	"reflect"
 	"sync"
 
 	"github.com/rhosocial/go-dag/workflow/standard/cache"
@@ -16,10 +17,33 @@ import (
 )
 
 // RunAsyncInterface defines asynchronous execution methods for a workflow.
+//
+// Note that there methods must be called asynchronously (add the `go` keyword before calling the method),
+// otherwise these methods will block subsequent execution.
+//
+// All methods of this interface involve the output channel and the err channel.
+//
+// The err channel will be sent the error result immediately after the entire workflow execution ends.
+// If there is no error, it will be sent nil.
+// When the channel receives error, the content of the output channel can be accessed.
+// Therefore, it is strongly recommended to set the output channel to a buffer by default,
+// and the err channel to be unbuffered.
+// If the received error is not nil, it means that the workflow execution has an error,
+// and the output channel may not send content at this time.
+// Therefore, you cannot use whether the output channel receives content
+// as a basis for judging the end of workflow execution
+// unless you can ensure that the workflow execution will not report an error.
 type RunAsyncInterface[TInput, TOutput any] interface {
 	// RunAsyncWithContext executes a workflow asynchronously with a custom context, input, and output channel.
+	//
+	// ctx is a context constructed using NewContext.
+	// input is the input content. output is the output channel, and err is the error channel.
 	RunAsyncWithContext(execCtx Context, input TInput, output chan<- TOutput, err chan<- error)
 	// RunAsync executes a workflow asynchronously with the given input and sends the result to the output channel.
+	//
+	// ctx is the context.Context of the internal package.
+	// If you require a customized context, use RunAsyncWithContext and pass in a custom constructed context.
+	// input is the input content. output is the output channel, and err is the error channel.
 	RunAsync(ctx baseContext.Context, input TInput, output chan<- TOutput, err chan<- error)
 }
 
@@ -45,7 +69,6 @@ type Interface[TInput, TOutput any] interface {
 type Workflow[TInput, TOutput any] struct {
 	Interface[TInput, TOutput]
 	RunAsyncInterface[TInput, TOutput]
-	cache  cache.Interface        // Cache for storing intermediate results.
 	graph  transit.GraphInterface // The DAG representing the workflow.
 	ctxMap sync.Map               // Map for storing execution contexts.
 }
@@ -123,18 +146,42 @@ func (wf *Workflow[TInput, TOutput]) processTransit(ctx Context, name string, tr
 		ctx.Cancel(channel.NewWorkerNotSpecifiedError(name))
 		return
 	}
+	var err error
 	inputs, err := wf.BuildWorkflowOutput(ctx, transit.GetIncoming()...)
 	if err != nil {
 		ctx.Cancel(err)
 		return
 	}
 
+	cacheMissed := true
+	transitCacheEnabled := CheckIfImplements(transit, (*KeyGetter)(nil)) &&
+		CheckIfImplements(transit, (*CacheInterface)(nil)) && transit.(CacheInterface) != nil &&
+		transit.(CacheInterface).GetCacheEnabled()
+	// Log point: transit cache enabled
+	var cacheInterface CacheInterface
+	var key cache.KeyGetter
+	var result any
+	if transitCacheEnabled {
+		cacheInterface = transit.(CacheInterface)
+		keyGetter := transit.(KeyGetter).GetKeyGetterFunc()
+		key = keyGetter(*inputs...)
+		var errCache error
+		result, errCache = cacheInterface.GetCache().Get(key)
+		cacheMissed = errCache != nil
+		// Log point: cache missed
+	}
+
 	// Execute the worker function with the inputs and context
-	result, err := worker(ctx.GetContext(), *inputs...)
-	if err != nil {
-		// If error occurs, propagate the error through the context
-		ctx.Cancel(err)
-		return
+	if cacheMissed {
+		result, err = worker(ctx.GetContext(), *inputs...)
+		if err != nil {
+			// If error occurs, propagate the error through the context
+			ctx.Cancel(err)
+			return
+		}
+		if transitCacheEnabled {
+			_ = cacheInterface.GetCache().Set(key, result)
+		}
 	}
 
 	// Pass the result to the next stage in the workflow
@@ -229,6 +276,9 @@ func (wf *Workflow[TInput, TOutput]) RunWithContext(execCtx Context, input TInpu
 }
 
 // RunAsync executes a workflow asynchronously with the given input and sends the result to the output channel.
+//
+// Note: "input" and "output" are fixed to the names of the workflow's input and output channels.
+// If not, please use RunAsyncWithContext instead.
 func (wf *Workflow[TInput, TOutput]) RunAsync(ctx baseContext.Context, input TInput, output chan<- TOutput, err chan<- error) {
 	// Generate a new identifier for this run
 	identifier := context.NewIdentifier(nil)
@@ -241,6 +291,9 @@ func (wf *Workflow[TInput, TOutput]) RunAsync(ctx baseContext.Context, input TIn
 }
 
 // Run executes the workflow with the given input and sends the result to the output channel.
+//
+// Note: "input" and "output" are fixed to the names of the workflow's input and output channels.
+// If not, please use RunWithContext instead.
 func (wf *Workflow[TInput, TOutput]) Run(ctx baseContext.Context, input TInput) (*TOutput, error) {
 	output := make(chan TOutput, 1)
 	signal := make(chan error)
@@ -271,6 +324,8 @@ type Option[TInput, TOutput any] func(workflow *Workflow[TInput, TOutput]) error
 // options is used for instantiating a workflow.
 // You must call the WithGraph() method to specify an execution graph for the workflow,
 // otherwise a GraphNotSpecifiedError will be reported.
+//
+// By default, caching is not enabled. If you need to enable it, please pass WithCacheEnabled(true).
 func NewWorkflow[TInput, TOutput any](options ...Option[TInput, TOutput]) (*Workflow[TInput, TOutput], error) {
 	workflow := &Workflow[TInput, TOutput]{}
 	for _, option := range options {
@@ -285,15 +340,6 @@ func NewWorkflow[TInput, TOutput any](options ...Option[TInput, TOutput]) (*Work
 	return workflow, nil
 }
 
-// WithCache specifies a public caching component for the workflow.
-// cache can be nil, meaning caching is not enabled.
-func WithCache[TInput, TOutput any](cache cache.Interface) Option[TInput, TOutput] {
-	return func(workflow *Workflow[TInput, TOutput]) error {
-		workflow.cache = cache
-		return nil
-	}
-}
-
 // WithGraph specifies an execution graph (DAG) for the workflow.
 // The execution graph must be instantiated, otherwise a GraphNilError will be reported.
 func WithGraph[TInput, TOutput any](graph transit.GraphInterface) Option[TInput, TOutput] {
@@ -304,4 +350,14 @@ func WithGraph[TInput, TOutput any](graph transit.GraphInterface) Option[TInput,
 		workflow.graph = graph
 		return nil
 	}
+}
+
+// CheckIfImplements checks if param implements the targetType interface.
+func CheckIfImplements(param any, targetType any) bool {
+	paramType := reflect.TypeOf(param)
+	if paramType == nil {
+		return false
+	}
+	targetTypeType := reflect.TypeOf(targetType).Elem()
+	return paramType.Implements(targetTypeType)
 }

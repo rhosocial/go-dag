@@ -4,32 +4,7 @@
 
 package cache
 
-import (
-	"fmt"
-	"sync"
-)
-
-// KeyNotFoundError represents an error indicating that a key was not found in the cache.
-type KeyNotFoundError struct {
-	key string
-	error
-}
-
-// Error returns the error message for KeyNotFoundError.
-func (e KeyNotFoundError) Error() string {
-	return fmt.Sprintf("key %s not found in cache", e.key)
-}
-
-// KeyExpiredError represents an error indicating that a key has expired in the cache.
-type KeyExpiredError struct {
-	key string
-	error
-}
-
-// Error returns the error message for KeyExpiredError.
-func (e KeyExpiredError) Error() string {
-	return fmt.Sprintf("key %s has expired", e.key)
-}
+import "sync"
 
 // MemoryCache represents an in-memory cache implementation.
 //
@@ -56,6 +31,7 @@ func NewMemoryCache() *MemoryCache {
 
 // Get retrieves the value associated with the given key from the cache.
 // If the key is not found or has expired, it returns an error.
+// You may need to check if it is nil before using.
 func (c *MemoryCache) Get(key KeyGetter) (any, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

@@ -69,6 +69,7 @@ func (w *workflowContext) GetChannel(name string) (chan any, bool) {
 
 // NewContext creates a new workflowContext with the specified input and output channels
 // and any additional context options. It returns the created workflowContext and any error encountered.
+// "input" and "output" are the names of the input and output channels of the workflow.
 func NewContext(input string, output string, options ...context.Option) (*workflowContext, error) {
 	baseCtx, err := context.NewContext(options...)
 	if err != nil {

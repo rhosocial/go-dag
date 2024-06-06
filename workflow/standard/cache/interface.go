@@ -5,6 +5,8 @@
 // Package cache defines the cache interface and the simplest cache implementation.
 package cache
 
+import "fmt"
+
 // KeyGetter defines a method to retrieve keys.
 type KeyGetter interface {
 	GetKey() string
@@ -20,7 +22,7 @@ type Interface interface {
 	//
 	// Returns
 	//
-	// - any: the retrieved value, returned as an empty interface.
+	// - any: the retrieved value, you may need to check if it is nil.
 	//
 	// - error: if an error occurs, it returns the corresponding error message.
 	Get(key KeyGetter) (any, error)
@@ -57,4 +59,26 @@ type Interface interface {
 	//
 	// - error: if an error occurs, it returns the corresponding error message.
 	Clear() error
+}
+
+// KeyNotFoundError represents an error indicating that a key was not found in the cache.
+type KeyNotFoundError struct {
+	key string
+	error
+}
+
+// Error returns the error message for KeyNotFoundError.
+func (e KeyNotFoundError) Error() string {
+	return fmt.Sprintf("key %s not found in cache", e.key)
+}
+
+// KeyExpiredError represents an error indicating that a key has expired in the cache.
+type KeyExpiredError struct {
+	key string
+	error
+}
+
+// Error returns the error message for KeyExpiredError.
+func (e KeyExpiredError) Error() string {
+	return fmt.Sprintf("key %s has expired", e.key)
 }
