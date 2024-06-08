@@ -162,12 +162,14 @@ func (wf *Workflow[TInput, TOutput]) processTransit(ctx Context, name string, tr
 	var key cache.KeyGetter
 	var result any
 	if transitCacheEnabled {
-		cacheInterface = transit.(CacheInterface)
 		keyGetter := transit.(KeyGetter).GetKeyGetterFunc()
-		key = keyGetter(*inputs...)
-		var errCache error
-		result, errCache = cacheInterface.GetCache().Get(key)
-		cacheMissed = errCache != nil
+		if keyGetter != nil {
+			key = keyGetter(*inputs...)
+			var errCache error
+			cacheInterface = transit.(CacheInterface)
+			result, errCache = cacheInterface.GetCache().Get(key)
+			cacheMissed = errCache != nil
+		}
 		// Log point: cache missed
 	}
 
