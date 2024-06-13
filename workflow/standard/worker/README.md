@@ -84,7 +84,7 @@ if result.Err != nil {
 Adjust the number of workers in the pool:
 
 ```go
-err := pool.Resize(10)
+err := pool.Resize(5, true) // Resize to 5 workers, stop busy workers
 if err != nil {
     fmt.Println("Resize error:", err)
 }

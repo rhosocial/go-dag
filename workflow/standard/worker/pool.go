@@ -2,6 +2,8 @@
 // Use of this source code is governed by Apache-2.0 license
 // that can be found in the LICENSE file.
 
+// Package worker provides a robust and efficient worker pool implementation.
+// It supports dynamic resizing of the pool, task submission, worker metrics tracking, and graceful shutdown.
 package worker
 
 import (
