@@ -6,6 +6,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"log"
 	"testing"
 	"time"
@@ -313,12 +314,21 @@ func TestWorkerPoolCancelTask(t *testing.T) {
 		resultChan1 := pool.Submit(ctx, &ExampleTask{ID: 1})
 		resultChan2 := pool.Submit(ctx, &ExampleTask{ID: 2})
 		resultChan3 := pool.Submit(ctx, &ExampleTask{ID: 3})
-		result1 := <-resultChan1
-		assert.ErrorIs(t, result1.Err, context.DeadlineExceeded)
-		result2 := <-resultChan2
-		assert.ErrorIs(t, result2.Err, context.DeadlineExceeded)
-		result3 := <-resultChan3
-		assert.NoError(t, result3.Err)
+
+		results := []TaskResult{<-resultChan1, <-resultChan2, <-resultChan3}
+		// Due to Go's runtime scheduling, the order of task execution is not guaranteed.
+		// Therefore, we only ensure that exactly two tasks have a DeadlineExceeded error.
+		deadlineExceededCount := 0
+
+		// Count the number of tasks that were canceled due to deadline exceeded
+		for _, result := range results {
+			if errors.Is(result.Err, context.DeadlineExceeded) {
+				deadlineExceededCount++
+			}
+		}
+
+		// Assert that exactly two tasks were canceled due to deadline exceeded
+		assert.Equal(t, 2, deadlineExceededCount, "expected exactly two tasks to be canceled due to deadline exceeded")
 
 		time.Sleep(time.Millisecond * 100)
 		m := metrics.GetMetrics()
