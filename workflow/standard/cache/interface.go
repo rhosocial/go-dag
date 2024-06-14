@@ -17,47 +17,37 @@ type Interface interface {
 	// Get retrieves the value of the specified key from the cache.
 	//
 	// Parameter
-	//
-	// - key: an object implementing the KeyGetter interface to retrieve the key to get.
+	//   - key: an object implementing the KeyGetter interface to retrieve the key to get.
 	//
 	// Returns
-	//
-	// - any: the retrieved value, you may need to check if it is nil.
-	//
-	// - error: if an error occurs, it returns the corresponding error message.
+	//   - any: the retrieved value, you may need to check if it is nil.
+	//   - error: if an error occurs, it returns the corresponding error message.
 	Get(key KeyGetter) (any, error)
 
 	// Set sets the value of the specified key in the cache.
 	//
 	// Parameter
-	//
-	// - key: an object implementing the KeyGetter interface to retrieve the key to set.
-	//
-	// - value: the value to set, passed as an empty interface.
-	//
-	// - options: optional options to set cache items.
+	//   - key: an object implementing the KeyGetter interface to retrieve the key to set.
+	//   - value: the value to set, passed as an empty interface.
+	//   - options: optional options to set cache items.
 	//
 	// Returns
-	//
-	// - error: if an error occurs, it returns the corresponding error message.
+	//   - error: if an error occurs, it returns the corresponding error message.
 	Set(key KeyGetter, value any, options ...ItemOption) error
 
 	// Delete deletes the value of the specified key from the cache.
 	//
 	// Parameter
-	//
-	// - key: an object implementing the KeyGetter interface to retrieve the key to delete.
+	//   - key: an object implementing the KeyGetter interface to retrieve the key to delete.
 	//
 	// Returns
-	//
-	// - error: if an error occurs, it returns the corresponding error message.
+	//   - error: if an error occurs, it returns the corresponding error message.
 	Delete(key KeyGetter) error
 
 	// Clear clears the cache, deleting all cache items.
 	//
 	// Returns
-	//
-	// - error: if an error occurs, it returns the corresponding error message.
+	//   - error: if an error occurs, it returns the corresponding error message.
 	Clear() error
 }
 
