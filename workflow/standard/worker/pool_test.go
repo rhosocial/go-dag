@@ -47,6 +47,15 @@ func (t *ErrorTask) Execute(ctx context.Context, args ...interface{}) (interface
 	return nil, context.DeadlineExceeded
 }
 
+type PanicTask struct {
+	ID int
+}
+
+func (t *PanicTask) Execute(ctx context.Context, args ...interface{}) (interface{}, error) {
+	time.Sleep(1 * time.Second)
+	panic("task panicked")
+}
+
 // TestWorkerPoolBasicFunctionality tests the basic functionality of the worker pool.
 func TestWorkerPoolBasicFunctionality(t *testing.T) {
 	metrics := &metrics{}
@@ -538,4 +547,22 @@ func TestExitWorkerByID(t *testing.T) {
 			t.Fatal("expected an error when stopping a non-existent worker, got none")
 		}
 	})
+}
+
+func TestPanicRecovery(t *testing.T) {
+	// Create a new worker pool with one worker.
+	p := NewPool(WithMaxWorkers(1))
+
+	resultChan := p.Submit(context.Background(), &PanicTask{ID: 1})
+
+	// Wait for the result.
+	result := <-resultChan
+
+	// Check if the result contains the expected panic error.
+	if result.Err == nil || result.Err.Error() != "task panicked: task panicked" {
+		t.Errorf("expected panic error, got %v", result.Err)
+	}
+
+	// Shutdown the pool.
+	p.Shutdown()
 }

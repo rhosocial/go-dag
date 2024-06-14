@@ -1,19 +1,18 @@
-# worker
+# Worker Pool
 
-`worker` is a package providing a robust and efficient worker pool implementation.
-It supports dynamic resizing of the pool, task submission, worker metrics tracking, and graceful shutdown.
+The `worker` package provides a robust and efficient worker pool implementation. It supports dynamic resizing of the pool, task submission, worker metrics tracking, and graceful shutdown. Additionally, it includes built-in panic recovery to ensure stability during task execution.
 
 ## Features
 
-- Dynamic resizing of the worker pool
-- Task submission with results
-- Worker-specific operations (stop, exit, rename)
-- Metrics tracking and retrieval
-- Graceful shutdown of the pool
+- **Dynamic Resizing**: Adjust the number of workers in the pool dynamically.
+- **Task Submission**: Submit tasks for asynchronous execution.
+- **Metrics Tracking**: Track various metrics such as successful, failed, and canceled tasks.
+- **Graceful Shutdown**: Shutdown the worker pool gracefully, ensuring all tasks are completed.
+- **Panic Recovery**: Recover from panics during task execution, ensuring the worker pool remains stable.
 
 ## Installation
 
-To install the package, run:
+To install the `worker` package, use the following command:
 
 ```shell
 go get github.com/rhosocial/go-dag/workflow/standard/worker
@@ -23,23 +22,38 @@ go get github.com/rhosocial/go-dag/workflow/standard/worker
 
 ### Creating a Worker Pool
 
-To create a new worker pool, use the `NewPool` function with optional configuration options:
+To create a worker pool using the `worker` package, you can use the `NewPool` function along with optional configuration options provided as `Option` functions.
 
 ```go
 package main
 
 import (
+    "context"
+    "fmt"
+    "time"
+
     "github.com/rhosocial/go-dag/workflow/standard/worker"
 )
 
-func main() {
-    pool := worker.NewPool(
-        worker.WithMaxWorkers(5),
-        worker.WithWorkerMetrics(worker.NewWorkerMetrics()),
-    )
-    defer pool.Shutdown()
+type myTask struct {
+    name string
 }
 
+func (t *myTask) Execute(ctx context.Context, args ...interface{}) (interface{}, error) {
+    // Simulate work
+    time.Sleep(2 * time.Second)
+    return fmt.Sprintf("Task %s completed", t.name), nil
+}
+
+func main() {
+    // Create a new worker pool with a maximum of 3 workers
+    p := worker.NewPool(worker.WithMaxWorkers(3))
+
+    // Use the pool as shown in the examples below
+
+    // Shutdown the worker pool
+    p.Shutdown()
+}
 ```
 
 > Note that while `WithMaxWorkers` is optional, it must be provided at least once to ensure the pool has workers.
@@ -48,7 +62,9 @@ func main() {
 
 ### Defining a Task
 
-Tasks need to implement the `Task` interface:
+Tasks in the `worker` package are defined by implementing the `Task` interface,
+which requires the `Execute` method to be implemented.
+Here's an example of defining a task:
 
 ```go
 package main
@@ -58,14 +74,14 @@ import "context"
 type MyTask struct{}
 
 func (t *MyTask) Execute(ctx context.Context, args ...interface{}) (interface{}, error) {
-    // Task execution logic
-    return nil, nil
+    // Implement task logic here
 }
 ```
 
 ### Submitting a Task
 
-Submit a task to the pool using the `Submit` method:
+To submit a task to the worker pool for asynchronous execution, use the `Submit` method.
+It returns a channel that will receive the result of the task execution.
 
 ```go
 task := &MyTask{}
@@ -79,15 +95,40 @@ if result.Err != nil {
 }
 ```
 
-### Resizing the Pool
+### Recover from Panicked
 
-Adjust the number of workers in the pool:
+The `worker` package includes built-in panic recovery to handle unexpected errors during task execution.
+If a task panics, the worker will recover from the panic and return an error, ensuring that the worker pool remains stable.
 
 ```go
-err := pool.Resize(5, true) // Resize to 5 workers, stop busy workers
-if err != nil {
-    fmt.Println("Resize error:", err)
+type panicTask struct{}
+
+func (t *panicTask) Execute(ctx context.Context, args ...interface{}) (interface{}, error) {
+    panic("something went wrong")
 }
+
+resultChan := p.Submit(context.Background(), &panicTask{})
+
+// Retrieve the result
+result := <-resultChan
+if result.Err != nil {
+    fmt.Printf("Task failed: %v\n", result.Err)
+}
+```
+
+### Resizing the Pool
+
+You can adjust the number of workers in the pool dynamically using the `Resize` method.
+This method allows you to increase or decrease the number of workers based on your application's needs.
+The second parameter `stopWorker` in Resize method behaves the same way as in the `ExitWorkerByID` method 
+and is effective only when reducing the number of workers.
+
+```go
+// Increase the number of workers
+err := p.Resize(5, false)
+
+// Decrease the number of workers
+err = p.Resize(2, true)
 ```
 
 > Note that if you want to decrease the pool capacity and some of the workers being removed are busy,
@@ -96,30 +137,35 @@ if err != nil {
 
 ### Listing Workers
 
-Retrieve the list of worker IDs:
+To retrieve the list of worker IDs currently active in the pool, use the `ListWorkers` method.
 
 ```go
-workerIDs := pool.ListWorkers()
-fmt.Println("Worker IDs:", workerIDs)
+workerIDs := p.ListWorkers()
+fmt.Printf("Active workers: %v\n", workerIDs)
 ```
 
 ### Stopping a Worker by ID
 
-Stop a worker by its ID without removing it from the pool:
+To stop a specific worker by its ID, use the `StopWorkerByID` method.
+This method cancels the currently executing task of the worker,
+allowing it to receive and execute new tasks afterward.
 
 ```go
-err := pool.StopWorkerByID("worker-1")
+err := p.StopWorkerByID("worker-1")
 if err != nil {
-    fmt.Println("StopWorkerByID error:", err)
+    fmt.Printf("Failed to stop worker: %v\n", err)
 }
 ```
 
 ### Exiting a Worker by ID
 
+To terminate a specific worker by its ID, use the `ExitWorkerByID` method.
+This method immediately terminates the worker, optionally canceling its current task execution.
+
 ```go
-err := pool.ExitWorkerByID("worker-1", true)
+err := p.ExitWorkerByID("worker-2", true)
 if err != nil {
-    fmt.Println("Exit error:", err)
+    fmt.Printf("Failed to exit worker: %v\n", err)
 }
 ```
 
@@ -127,21 +173,33 @@ This method terminates and exits a worker. If `stopWorker` is true, the task's c
 otherwise, it will not be notified. The method immediately removes the worker, even if the task is still running.
 Ensure that tasks can handle context's `Done` signal or complete within a reasonable time.
 
-### Metrics
+### Using Metrics
 
-If you specified `WithWorkerMetrics`, you can retrieve metrics:
+To track metrics related to the worker pool, implement the `MetricsProvider` interface and provide it
+during the creation of the pool using the `WithWorkerMetrics` option.
 
 ```go
-metrics := metricsProvider.GetMetrics()
-fmt.Printf("Current Capacity: %d\n", metrics.CurrentCapacity)
-fmt.Printf("Working Workers: %d\n", metrics.WorkingWorkers)
-fmt.Printf("Idle Workers: %d\n", metrics.IdleWorkers)
-fmt.Printf("Waiting Tasks: %d\n", metrics.WaitingTasks)
-fmt.Printf("Total Submitted Tasks: %d\n", metrics.TotalSubmittedTasks)
-fmt.Printf("Total Completed Tasks: %d\n", metrics.TotalCompletedTasks)
-fmt.Printf("Successful Tasks: %d\n", metrics.SuccessfulTasks)
-fmt.Printf("Failed Tasks: %d\n", metrics.FailedTasks)
-fmt.Printf("Canceled Tasks: %d\n", metrics.CanceledTasks)
+type myMetricsProvider struct {
+    // Implement metrics fields
+}
+
+func (m *myMetricsProvider) GetMetrics() worker.Metrics {
+    // Return the current metrics
+}
+
+func (m *myMetricsProvider) ResetAllMetrics() {
+    // Reset all metrics
+}
+
+func (m *myMetricsProvider) ResetMetric(metric int) error {
+    // Reset a specific metric
+}
+
+metricsProvider := &myMetricsProvider{}
+
+// Create a new worker pool with metrics tracking
+p := worker.NewPool(worker.WithMaxWorkers(3), worker.WithWorkerMetrics(metricsProvider))
+
 ```
 
 > Note: There may be a delay in metrics updates. Immediately calling `GetMetrics` after performing operations

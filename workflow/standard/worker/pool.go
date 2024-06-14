@@ -2,8 +2,9 @@
 // Use of this source code is governed by Apache-2.0 license
 // that can be found in the LICENSE file.
 
-// Package worker provides a robust and efficient worker pool implementation.
-// It supports dynamic resizing of the pool, task submission, worker metrics tracking, and graceful shutdown.
+// Package worker provides a robust and efficient worker pool implementation. It supports dynamic resizing of the pool,
+// task submission, worker metrics tracking, and graceful shutdown.
+// Additionally, it includes built-in panic recovery to ensure stability during task execution.
 package worker
 
 import (
@@ -145,6 +146,9 @@ func NewPool(options ...Option) Pool {
 // while worker exits decrement it. During task execution, the WorkingWorkers metric
 // increments, and decrements after task completion.
 //
+// If a panic occurs during task execution, it is recovered and the FailedTasks metric
+// is incremented.
+//
 // For more detailed information about metrics, refer to the Metrics struct documentation.
 //
 // Returns:
@@ -200,6 +204,11 @@ func (p *pool) startWorker() string {
 				}()
 				go func() {
 					defer close(done)
+					defer func() {
+						if r := recover(); r != nil {
+							result.Err = fmt.Errorf("task panicked: %v", r)
+						}
+					}()
 					result.Result, err = taskWithArgs.task.Execute(taskWithArgs.ctx, taskWithArgs.args...)
 					result.Err = err
 				}()
@@ -217,8 +226,8 @@ func (p *pool) startWorker() string {
 						taskWithArgs.resultChan <- TaskResult{}
 					case <-done:
 						// Task completed
-						if err != nil {
-							if errors.Is(err, context.Canceled) {
+						if result.Err != nil {
+							if errors.Is(result.Err, context.Canceled) {
 								delta.deltaCanceled = 1
 							} else {
 								delta.deltaFailed = 1
