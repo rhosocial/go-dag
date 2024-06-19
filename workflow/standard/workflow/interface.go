@@ -17,34 +17,26 @@ import (
 )
 
 // RunAsyncInterface defines asynchronous execution methods for a workflow.
-//
-// Note that there methods must be called asynchronously (add the `go` keyword before calling the method),
-// otherwise these methods will block subsequent execution.
-//
-// All methods of this interface involve the output channel and the err channel.
-//
-// The err channel will be sent the error result immediately after the entire workflow execution ends.
-// If there is no error, it will be sent nil.
-// When the channel receives error, the content of the output channel can be accessed.
-// Therefore, it is strongly recommended to set the output channel to a buffer by default,
-// and the err channel to be unbuffered.
-// If the received error is not nil, it means that the workflow execution has an error,
-// and the output channel may not send content at this time.
-// Therefore, you cannot use whether the output channel receives content
-// as a basis for judging the end of workflow execution
-// unless you can ensure that the workflow execution will not report an error.
+// All methods are asynchronous, meaning that after calling the methods defined by this interface,
+// subsequent statements will be executed immediately without waiting for the workflow to complete.
+// All methods return an output channel and an err channel. The output channel is used to receive the execution result,
+// and the err channel is used to receive any errors that occur during execution.
+// The err channel is unbuffered, meaning that receiving content from the err channel can be used as a sign
+// that the workflow execution has ended. If there are no errors, nil will be received.
+// If err receives nil, it indicates that the output channel has buffered the workflow execution result,
+// and you can directly receive the content of the output channel.
 type RunAsyncInterface[TInput, TOutput any] interface {
 	// RunAsyncWithContext executes a workflow asynchronously with a custom context, input, and output channel.
 	//
 	// ctx is a context constructed using NewContext.
 	// input is the input content. output is the output channel, and err is the error channel.
-	RunAsyncWithContext(execCtx Context, input TInput, output chan<- TOutput, err chan<- error)
+	RunAsyncWithContext(execCtx Context, input TInput) (output <-chan TOutput, err <-chan error)
 	// RunAsync executes a workflow asynchronously with the given input and sends the result to the output channel.
 	//
 	// ctx is the context.Context of the internal package.
 	// If you require a customized context, use RunAsyncWithContext and pass in a custom constructed context.
 	// input is the input content. output is the output channel, and err is the error channel.
-	RunAsync(ctx baseContext.Context, input TInput, output chan<- TOutput, err chan<- error)
+	RunAsync(ctx baseContext.Context, input TInput) (output <-chan TOutput, err <-chan error)
 }
 
 // Interface defines the methods required for a workflow.
@@ -216,7 +208,7 @@ func (wf *Workflow[TInput, TOutput]) BuildChannels(ctx Context) {
 }
 
 // RunAsyncWithContext executes a workflow asynchronously with a custom context, input, and output channel.
-func (wf *Workflow[TInput, TOutput]) RunAsyncWithContext(execCtx Context, input TInput, output chan<- TOutput, err chan<- error) {
+func (wf *Workflow[TInput, TOutput]) RunAsyncWithContext(execCtx Context, input TInput) (<-chan TOutput, <-chan error) {
 	// Build channels for the workflow
 	wf.BuildChannels(execCtx)
 	// This method does not return an error.
@@ -254,21 +246,26 @@ func (wf *Workflow[TInput, TOutput]) RunAsyncWithContext(execCtx Context, input 
 	_ = wf.BuildWorkflowInput(execCtx, input, execCtx.GetChannelInput())
 	<-signal
 
+	output := make(chan TOutput, 1)
+	err := make(chan error)
 	// Check if context was cancelled due to an error
 	if execCtx.GetContext().Err() != nil {
-		err <- execCtx.GetContext().Err()
-		return
+		go func() {
+			err <- execCtx.GetContext().Err()
+		}()
+		return output, err
 	}
 
-	output <- *results
-	err <- nil
+	go func() {
+		output <- *results
+		err <- nil
+	}()
+	return output, err
 }
 
 // RunWithContext executes the workflow with the given input and sends the result to the output channel using a custom context.
 func (wf *Workflow[TInput, TOutput]) RunWithContext(execCtx Context, input TInput) (*TOutput, error) {
-	output := make(chan TOutput, 1)
-	signal := make(chan error)
-	go wf.RunAsyncWithContext(execCtx, input, output, signal)
+	output, signal := wf.RunAsyncWithContext(execCtx, input)
 	err := <-signal
 	if err != nil {
 		return nil, err
@@ -281,7 +278,7 @@ func (wf *Workflow[TInput, TOutput]) RunWithContext(execCtx Context, input TInpu
 //
 // Note: "input" and "output" are fixed to the names of the workflow's input and output channels.
 // If not, please use RunAsyncWithContext instead.
-func (wf *Workflow[TInput, TOutput]) RunAsync(ctx baseContext.Context, input TInput, output chan<- TOutput, err chan<- error) {
+func (wf *Workflow[TInput, TOutput]) RunAsync(ctx baseContext.Context, input TInput) (output <-chan TOutput, err <-chan error) {
 	// Generate a new identifier for this run
 	identifier := context.NewIdentifier(nil)
 
@@ -289,7 +286,7 @@ func (wf *Workflow[TInput, TOutput]) RunAsync(ctx baseContext.Context, input TIn
 	customCtx, cancel := baseContext.WithCancelCause(ctx)
 	execCtx, _ := NewContext("input", "output", context.WithContext(customCtx, cancel), context.WithIdentifier(identifier))
 	// Since the WithContext and WithIdentifier methods do not return errors, the error judgment is ignored here.
-	wf.RunAsyncWithContext(execCtx, input, output, err)
+	return wf.RunAsyncWithContext(execCtx, input)
 }
 
 // Run executes the workflow with the given input and sends the result to the output channel.
@@ -297,9 +294,7 @@ func (wf *Workflow[TInput, TOutput]) RunAsync(ctx baseContext.Context, input TIn
 // Note: "input" and "output" are fixed to the names of the workflow's input and output channels.
 // If not, please use RunWithContext instead.
 func (wf *Workflow[TInput, TOutput]) Run(ctx baseContext.Context, input TInput) (*TOutput, error) {
-	output := make(chan TOutput, 1)
-	signal := make(chan error)
-	go wf.RunAsync(ctx, input, output, signal)
+	output, signal := wf.RunAsync(ctx, input)
 	err := <-signal
 	if err != nil {
 		return nil, err

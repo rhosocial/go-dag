@@ -37,10 +37,12 @@ func (m *MockWorkflow) BuildChannels(ctx Context) {}
 func (m *MockWorkflow) BuildWorkflow(ctx Context) {
 }
 
-func (m *MockWorkflow) RunAsyncWithContext(execCtx Context, input struct{}, output chan<- struct{}, err chan<- error) {
+func (m *MockWorkflow) RunAsyncWithContext(execCtx Context, input struct{}) (<-chan struct{}, <-chan error) {
+	return make(<-chan struct{}), nil
 }
 
-func (m *MockWorkflow) RunAsync(ctx baseContext.Context, input struct{}, output chan<- struct{}, err chan<- error) {
+func (m *MockWorkflow) RunAsync(ctx baseContext.Context, input struct{}) (<-chan struct{}, <-chan error) {
+	return make(<-chan struct{}), nil
 }
 
 func (m *MockWorkflow) RunWithContext(execCtx Context, input struct{}) (*struct{}, error) {
@@ -99,9 +101,7 @@ func TestNewWorkflowWithGraphAndTopologicalSort(t *testing.T) {
 		return
 	}
 
-	output := make(chan struct{}, 1)
-	signal := make(chan error)
-	go workflow.RunAsync(baseContext.Background(), struct{}{}, output, signal)
+	output, signal := workflow.RunAsync(baseContext.Background(), struct{}{})
 	log.Println("workflow run")
 	log.Printf("result: %v, err: %v\n", <-output, <-signal)
 	log.Println(workflow.graph.TopologicalSort())
@@ -339,9 +339,7 @@ func TestWorkflow_processTransit(t *testing.T) {
 		))
 		workflow, _ := NewWorkflow[struct{}, struct{}](WithGraph[struct{}, struct{}](graph))
 
-		output := make(chan struct{}, 1)
-		signal := make(chan error)
-		go workflow.RunAsync(baseContext.Background(), struct{}{}, output, signal)
+		_, signal := workflow.RunAsync(baseContext.Background(), struct{}{})
 		log.Println("workflow run")
 		log.Printf("err: %v\n", <-signal)
 		log.Println(workflow.graph.TopologicalSort())
@@ -401,9 +399,7 @@ func TestNewWorkflowWithCache(t *testing.T) {
 		return
 	}
 
-	output := make(chan string, 1)
-	signal := make(chan error)
-	go workflow.RunAsync(baseContext.Background(), "transit_with_cache", output, signal)
+	output, signal := workflow.RunAsync(baseContext.Background(), "transit_with_cache")
 	log.Println("workflow run")
 	log.Printf("result: %v, err: %v\n", <-output, <-signal)
 	log.Println(workflow.graph.TopologicalSort())
