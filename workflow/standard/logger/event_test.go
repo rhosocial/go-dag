@@ -2,7 +2,7 @@
 // Use of this source code is governed by Apache-2.0 license
 // that can be found in the LICENSE file.
 
-package context
+package logger
 
 import (
 	"context"
@@ -41,18 +41,25 @@ func TestEventManager(t *testing.T) {
 	ctxBg, cancelBg := context.WithCancel(context.Background())
 	go em.Listen(ctxBg)
 
-	// Create a context with eventManager
-	ctx := WorkerContextWithEventManager(context.Background(), em)
+	// Get logger
+	logger := em.GetLogger()
+	if logger == nil {
+		t.Fatalf("logger is nil")
+	}
 
-	// Retrieve event channel from context
-	eventChannel := GetEventChannelFromWorkerContext(ctx)
-	if eventChannel == nil {
-		t.Fatal("Failed to retrieve event channel from context")
+	if logger_ := GetLoggerFromWorkerContext(context.Background()); logger_ != nil {
+		t.Fatalf("logger is not nil")
+	}
+
+	// Create a context with logger
+	ctx := WorkerContextWithLogger(context.Background(), em.GetLogger())
+	if logger_ := GetLoggerFromWorkerContext(ctx); logger_ == nil {
+		t.Fatalf("logger is nil")
 	}
 
 	// Publish an event
 	event := &MockEvent{Message: "Test event"}
-	eventChannel <- event
+	logger.Log(event)
 
 	// Wait for a short time to ensure event processing
 	time.Sleep(100 * time.Millisecond)
@@ -73,7 +80,7 @@ func TestEventManager(t *testing.T) {
 	delete(em.subscribers, "mock_subscriber")
 
 	// Publish another event after removing subscriber
-	eventChannel <- &MockEvent{Message: "Test event 2"}
+	logger.Log(&MockEvent{Message: "Test event 2"})
 
 	// Wait for a short time to ensure event processing
 	time.Sleep(100 * time.Millisecond)
@@ -86,28 +93,6 @@ func TestEventManager(t *testing.T) {
 	cancelBg()
 }
 
-func TestContextWithEventManager(t *testing.T) {
-	// Create a new eventManager
-	em, err := NewEventManager()
-	if err != nil {
-		t.Fatalf("Error creating eventManager: %v", err)
-	}
-
-	// Create a context with eventManager
-	ctx := WorkerContextWithEventManager(context.Background(), em)
-
-	// Retrieve event channel from context
-	retrieveChan := GetEventChannelFromWorkerContext(ctx)
-	if retrieveChan == nil {
-		t.Fatal("Failed to retrieve eventManager from context")
-	}
-
-	// Ensure that retrieved eventManager matches the original one
-	if retrieveChan != em.eventChannel {
-		t.Fatal("Retrieved eventManager does not match the original one")
-	}
-}
-
 func WithSubscriberError() EventManagerOption {
 	return func(em *EventManager) error {
 		return errors.New("with subscriber error")
@@ -118,10 +103,4 @@ func TestEventManagerWithError(t *testing.T) {
 	em, err := NewEventManager(WithSubscriberError())
 	assert.Error(t, err)
 	assert.Nil(t, em)
-}
-
-func TestGetEventChannelFromContextNil(t *testing.T) {
-	// Retrieve event channel from context
-	retrieveChan := GetEventChannelFromWorkerContext(context.Background())
-	assert.Nil(t, retrieveChan)
 }

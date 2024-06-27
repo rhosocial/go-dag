@@ -2,23 +2,32 @@
 // Use of this source code is governed by Apache-2.0 license
 // that can be found in the LICENSE file.
 
-package context
+// Package logger provides an event subscriber and a basic log event.
+package logger
 
 import "context"
 
 // EventInterface represents an event sent by workflow or transit workers.
+//
+// If you want to customize events, please extend this interface.
 type EventInterface interface{}
 
 // SubscriberInterface represents a subscriber that listens for events.
 type SubscriberInterface interface {
 	// ReceiveEvent is called when an event is received.
+	//
+	// Note that if the event is nil, it will not be dispatched.
 	ReceiveEvent(event EventInterface)
 }
 
 // EventManagerInterface represents an interface for managing events.
 type EventManagerInterface interface {
 	// Listen listens for events and sends them to subscribers.
+	//
+	// This method is actually called asynchronously by the event manager,
+	// so you don't have to worry about this method being time-consuming and blocking other processes.
 	Listen(ctx context.Context)
+	GetLogger() Interface
 }
 
 // EventManager manages events and subscribers.
@@ -28,9 +37,18 @@ type EventManager struct {
 
 	// subscribers is a map of subscriber identifiers to subscriber instances.
 	subscribers map[string]SubscriberInterface
+
+	logger Interface
 }
 
 // NewEventManager creates a new EventManager instance.
+//
+// Note that the new instance cannot receive events directly and needs to start listening first. For example:
+//
+//	manager, err := NewEventManager(WithSubscriber("identifier", subscriber))
+//	ctxBg, cancelBg := context.WithCancel(context.Background())
+//	go manager.Listen(ctxBg)
+//	<receive events...>
 func NewEventManager(options ...EventManagerOption) (*EventManager, error) {
 	eventManager := &EventManager{
 		// Initialize eventChannel to handle EventInterface.
@@ -39,6 +57,7 @@ func NewEventManager(options ...EventManagerOption) (*EventManager, error) {
 		// Initialize subscribers as an empty map.
 		subscribers: make(map[string]SubscriberInterface),
 	}
+	eventManager.logger = NewLogger(eventManager.eventChannel)
 	for _, option := range options {
 		// Apply each option to the event manager.
 		err := option(eventManager)
@@ -53,6 +72,15 @@ func NewEventManager(options ...EventManagerOption) (*EventManager, error) {
 type EventManagerOption func(*EventManager) error
 
 // WithSubscriber adds a subscriber to the event manager.
+//
+//   - identifier: represents the identifier of the subscriber.
+//   - subscriber: the subscriber instance, which needs to implement the SubscriberInterface.
+//
+// This method can be called multiple times to add multiple subscribers. When an event is received,
+// it will be dispatched to each subscriber.
+// The dispatch order is not guaranteed to match the order in which subscribers were added,
+// so you cannot rely on the order of subscriber addition to determine the event dispatch order.
+// If no subscribers are added, received events will be discarded and not dispatched.
 func WithSubscriber(identifier string, subscriber SubscriberInterface) EventManagerOption {
 	return func(manager *EventManager) error {
 		manager.subscribers[identifier] = subscriber
@@ -87,18 +115,20 @@ func (em *EventManager) Listen(ctx context.Context) {
 	}
 }
 
-// KeyEventManagerChannel is the context key for the event manager channel.
-const KeyEventManagerChannel = "__go_dag_workflow_event_channel"
-
-// WorkerContextWithEventManager creates a new context with the provided event manager.
-func WorkerContextWithEventManager(ctx context.Context, em *EventManager) context.Context {
-	return context.WithValue(ctx, KeyEventManagerChannel, em.eventChannel)
+// GetLogger returns the logger instance.
+func (em *EventManager) GetLogger() Interface {
+	return em.logger
 }
 
-// GetEventChannelFromWorkerContext retrieves the event channel from the context.
-func GetEventChannelFromWorkerContext(ctx context.Context) chan<- EventInterface {
-	if em, ok := ctx.Value(KeyEventManagerChannel).(chan EventInterface); ok {
-		return em
+const KeyEventManagerLogger = "__go_dag_workflow_event_logger"
+
+func WorkerContextWithLogger(ctx context.Context, logger Interface) context.Context {
+	return context.WithValue(ctx, KeyEventManagerLogger, logger)
+}
+
+func GetLoggerFromWorkerContext(ctx context.Context) Interface {
+	if logger, ok := ctx.Value(KeyEventManagerLogger).(Interface); ok {
+		return logger
 	}
 	return nil
 }

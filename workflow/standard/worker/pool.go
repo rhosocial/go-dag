@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/rhosocial/go-dag/workflow/standard/logger"
 	"sync"
 )
 
@@ -61,15 +62,16 @@ type workerChannels struct {
 
 // pool is the concrete implementation of Pool.
 type pool struct {
-	tasks       chan TaskWithArgs
-	workerCount int
-	workerWg    sync.WaitGroup
-	quit        chan struct{}
-	mutex       sync.Mutex
-	workerMap   map[string]*workerChannels
-	workerIndex int
-	metrics     MetricsProvider
-	metricsChan chan metricsUpdate
+	tasks        chan TaskWithArgs
+	workerCount  int
+	workerWg     sync.WaitGroup
+	quit         chan struct{}
+	mutex        sync.Mutex
+	workerMap    map[string]*workerChannels
+	workerIndex  int
+	metrics      MetricsProvider
+	metricsChan  chan metricsUpdate
+	eventManager logger.EventManagerInterface
 }
 
 // TaskWithArgs represents a task with its arguments and result channel.
@@ -108,6 +110,16 @@ func WithMaxWorkers(max int) Option {
 func WithWorkerMetrics(metrics MetricsProvider) Option {
 	return func(p *pool) {
 		p.metrics = metrics
+	}
+}
+
+// WithEventManager sets the event manager.
+func WithEventManager(eventManager logger.EventManagerInterface, ctx context.Context) Option {
+	return func(p *pool) {
+		p.eventManager = eventManager
+		if p.eventManager != nil {
+			go p.eventManager.Listen(ctx)
+		}
 	}
 }
 
@@ -169,6 +181,7 @@ func (p *pool) startWorker() string {
 	p.workerMap[workerID] = channels
 	p.mutex.Unlock()
 
+	p.Log(NewEventStartingWorker(workerID))
 	p.workerWg.Add(1)
 	go func(p *pool, id string, channels *workerChannels) {
 		defer func() {
@@ -285,6 +298,8 @@ func (p *pool) Resize(count int, stopWorker bool) error {
 	p.workerCount = count
 	p.mutex.Unlock()
 
+	p.Log(NewEventResizing(currentCount, count))
+
 	if count > currentCount {
 		for i := currentCount; i < count; i++ {
 			p.startWorker()
@@ -375,6 +390,8 @@ func (p *pool) Submit(ctx context.Context, task Task, args ...interface{}) <-cha
 //
 // Returns an error if the worker ID is not found.
 func (p *pool) ExitWorkerByID(id string, stopWorker bool) error {
+	p.Log(NewEventExitingWorker(id, stopWorker))
+
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -400,6 +417,8 @@ func (p *pool) ExitWorkerByID(id string, stopWorker bool) error {
 //
 // Returns an error if the worker ID is not found.
 func (p *pool) StopWorkerByID(id string) error {
+	p.Log(NewEventStoppingWorker(id))
+
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -419,6 +438,8 @@ func (p *pool) StopWorkerByID(id string) error {
 //
 // Returns an error if the old ID is not found or the new ID already exists.
 func (p *pool) RenameWorker(oldID, newID string) error {
+	p.Log(NewEventRenamingWorker(oldID, newID))
+
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -441,7 +462,10 @@ func (p *pool) RenameWorker(oldID, newID string) error {
 // of those tasks.
 //
 // The pool will be completely shut down, and no new tasks will be accepted.
+// Note that if the worker pool has an event manager and the event listening goroutine is enabled,
+// this method will not close the currently listening event goroutine.
 func (p *pool) Shutdown() {
+	p.Log(NewEventShutdown())
 	p.mutex.Lock()
 	for id, channels := range p.workerMap {
 		channels.cancel <- errors.New("pool shutdown")
@@ -501,4 +525,11 @@ func (p *pool) handleMetricsUpdates() {
 		metrics.data.TotalCompletedTasks += update.deltaSuccessful + update.deltaFailed + update.deltaCanceled
 		metrics.Unlock()
 	}
+}
+
+func (p *pool) Log(event logger.EventInterface) {
+	if p.eventManager == nil || p.eventManager.GetLogger() == nil {
+		return
+	}
+	p.eventManager.GetLogger().Log(event)
 }

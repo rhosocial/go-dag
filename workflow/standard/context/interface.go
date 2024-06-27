@@ -6,7 +6,11 @@
 // deadlines, and request-scoped values across Goroutines.
 package context
 
-import "context"
+import (
+	"context"
+
+	"github.com/rhosocial/go-dag/workflow/standard/logger"
+)
 
 // Context defines the methods that a context implementation must satisfy.
 type Context interface {
@@ -16,7 +20,7 @@ type Context interface {
 	GetIdentifier() IdentifierInterface
 	GetOptions() OptionsInterface
 	GetReports() ReportsInterface
-	GetEventManager() EventManagerInterface
+	GetEventManager() logger.EventManagerInterface
 }
 
 // BaseContext represents a context instance that encapsulates a context.BaseContext and
@@ -71,7 +75,7 @@ type BaseContext struct {
 	// This field is optional; if not specified, it means events will not be listened to or sent
 	// to any subscribers for this execution. If event-driven communication is not needed,
 	// this field can be left unspecified.
-	eventManager EventManagerInterface
+	eventManager logger.EventManagerInterface
 }
 
 // Cancel cancels the context with the provided error cause.
@@ -87,7 +91,7 @@ func (c *BaseContext) GetOptions() OptionsInterface { return c.options }
 
 func (c *BaseContext) GetReports() ReportsInterface { return c.reports }
 
-func (c *BaseContext) GetEventManager() EventManagerInterface { return c.eventManager }
+func (c *BaseContext) GetEventManager() logger.EventManagerInterface { return c.eventManager }
 
 // Option is a function type for defining context configuration options.
 type Option func(*BaseContext) error
@@ -157,7 +161,7 @@ func WithReports(reports ReportsInterface) Option {
 // You must explicitly start the Listen() method on the event manager at the appropriate time
 // in your application. Failure to do so will result in the workflow and transit workers being
 // blocked when they attempt to send data to the event channel.
-func WithEventManager(eventManager EventManagerInterface) Option {
+func WithEventManager(eventManager logger.EventManagerInterface) Option {
 	return func(context *BaseContext) error {
 		context.eventManager = eventManager
 		return nil

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/rhosocial/go-dag/workflow/standard/logger"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -66,10 +67,12 @@ func (o MockReports) AddTransit(transit string, key string, value any) error {
 }
 
 type MockEventManager struct {
-	EventManagerInterface
+	logger.EventManagerInterface
 }
 
 func (o MockEventManager) Listen(ctx context.Context) {}
+
+func (o MockEventManager) GetLogger() logger.Interface { return nil }
 
 type MockContext struct {
 	Context
@@ -85,7 +88,7 @@ func (m MockContext) GetOptions() OptionsInterface { return nil }
 
 func (m MockContext) GetReports() ReportsInterface { return nil }
 
-func (m MockContext) GetEventManager() EventManagerInterface { return nil }
+func (m MockContext) GetEventManager() logger.EventManagerInterface { return nil }
 
 // Ensure MockIdentifier implements IdentifierInterface
 var _ IdentifierInterface = (*MockIdentifier)(nil)
@@ -94,7 +97,7 @@ var _ IdentifierInterface = (*MockIdentifier)(nil)
 var _ OptionsInterface = (*MockOptions)(nil)
 
 // Ensure MockEventManager implements EventManagerInterface
-var _ EventManagerInterface = (*MockEventManager)(nil)
+var _ logger.EventManagerInterface = (*MockEventManager)(nil)
 
 var _ Context = (*MockContext)(nil)
 

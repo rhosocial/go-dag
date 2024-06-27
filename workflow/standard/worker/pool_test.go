@@ -7,6 +7,7 @@ package worker
 import (
 	"context"
 	"errors"
+	"github.com/rhosocial/go-dag/workflow/standard/logger"
 	"log"
 	"testing"
 	"time"
@@ -565,4 +566,11 @@ func TestPanicRecovery(t *testing.T) {
 
 	// Shutdown the pool.
 	p.Shutdown()
+}
+
+func TestWithEventManager(t *testing.T) {
+	eventManager, _ := logger.NewEventManager()
+	ctx, cancel := context.WithCancelCause(context.Background())
+	_ = NewPool(WithEventManager(eventManager, ctx), WithMaxWorkers(1))
+	cancel(errors.New("test finished"))
 }
