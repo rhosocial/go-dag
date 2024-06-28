@@ -223,6 +223,8 @@ type Workflow[TInput, TOutput any] struct {
 	transits   *Transits
 	muLoggers  sync.RWMutex
 	loggers    *Loggers
+	ctx        context.Context
+	close      context.CancelFunc
 	WorkflowInterface[TInput, TOutput]
 }
 
@@ -475,10 +477,7 @@ func (d *Workflow[TInput, TOutput]) BuildWorkflow(ctx context.Context) error {
 // After this method is executed, all input, output channels and transits will be deleted.
 // Note, please do not call this method during workflow execution, otherwise it will lead to unpredictable consequences.
 func (d *Workflow[TInput, TOutput]) CloseWorkflow() {
-	d.muChannels.Lock()
-	defer d.muChannels.Unlock()
-	d.channels.close()
-	d.channels = nil
+	d.close()
 }
 
 // Execute the workflow.
@@ -492,6 +491,11 @@ func (d *Workflow[TInput, TOutput]) CloseWorkflow() {
 func (d *Workflow[TInput, TOutput]) Execute(root context.Context, input *TInput) *TOutput {
 	// The sub-context is introduced and has a cancellation handler, making it easy to terminate the entire process
 	// at any time.
+	select {
+	case <-d.ctx.Done():
+		return nil
+	default:
+	}
 	ctx, cancel := context.WithCancelCause(root)
 
 	// Record the context and cancellation handler, so they can be called at the appropriate time.
