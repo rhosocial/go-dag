@@ -4,13 +4,19 @@
 
 package simple
 
+import "context"
+
 // Option defines the option used to instantiate a Workflow.
 // If an error occurs during instantiation, it needs to be reported. If no errors occurred, `nil` is returned.
 type Option[TInput, TOutput any] func(d *Workflow[TInput, TOutput]) error
 
 // NewWorkflow instantiates a workflow.
 func NewWorkflow[TInput, TOutput any](options ...Option[TInput, TOutput]) (*Workflow[TInput, TOutput], error) {
-	dag := &Workflow[TInput, TOutput]{}
+	ctx, cancel := context.WithCancel(context.Background())
+	dag := &Workflow[TInput, TOutput]{
+		ctx:   ctx,
+		close: cancel,
+	}
 	for _, option := range options {
 		err := option(dag)
 		if err != nil {

@@ -58,6 +58,7 @@ func TestSimpleWorkflowValueTypeError_Error(t *testing.T) {
 	input := "input"
 	assert.Nil(t, f.Execute(context.Background(), &input))
 	assert.Nil(t, f.RunOnce(context.Background(), &input))
+	assert.Nil(t, f.Execute(context.Background(), &input))
 }
 
 // NewWorkflowTwoParallelTransitsWithLogger defines a workflow with logger.
