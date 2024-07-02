@@ -5,7 +5,10 @@
 // Package logger provides an event subscriber and a basic log event.
 package logger
 
-import "context"
+import (
+	"context"
+	"sync"
+)
 
 // EventInterface represents an event sent by workflow or transit workers.
 //
@@ -30,6 +33,12 @@ type EventManagerInterface interface {
 	GetLogger() Interface
 }
 
+type EventManagerSubscriberInterface interface {
+	AddSubscriber(identifier string, subscriber SubscriberInterface)
+	RemoveSubscriber(identifier string)
+	GetSubscriber(identifier string) SubscriberInterface
+}
+
 // EventManager manages events and subscribers.
 type EventManager struct {
 	// eventChannel is a channel through which events are sent.
@@ -37,6 +46,7 @@ type EventManager struct {
 
 	// subscribers is a map of subscriber identifiers to subscriber instances.
 	subscribers map[string]SubscriberInterface
+	mu          sync.RWMutex
 
 	// logger holds the log transport that sends logs to this event manager.
 	// Please see GetLogger
@@ -94,7 +104,7 @@ type EventManagerOption func(*EventManager) error
 // If no subscribers are added, received events will be discarded and not dispatched.
 func WithSubscriber(identifier string, subscriber SubscriberInterface) EventManagerOption {
 	return func(manager *EventManager) error {
-		manager.subscribers[identifier] = subscriber
+		manager.AddSubscriber(identifier, subscriber)
 		return nil
 	}
 }
@@ -120,12 +130,14 @@ func (em *EventManager) Listen() {
 		select {
 		case event := <-em.eventChannel:
 			// Dispatch event to all subscribers.
+			em.mu.Lock()
 			for _, subscriber := range em.subscribers {
 				if subscriber != nil {
 					// Call ReceiveEvent in a separate goroutine.
 					go subscriber.ReceiveEvent(event)
 				}
 			}
+			em.mu.Unlock()
 		case <-em.ctx.Done():
 			// Exit the loop if the context is done.
 			return
@@ -137,6 +149,24 @@ func (em *EventManager) Listen() {
 // GetLogger returns the logger instance.
 func (em *EventManager) GetLogger() Interface {
 	return em.logger
+}
+
+func (em *EventManager) AddSubscriber(identifier string, subscriber SubscriberInterface) {
+	em.mu.Lock()
+	defer em.mu.Unlock()
+	em.subscribers[identifier] = subscriber
+}
+
+func (em *EventManager) RemoveSubscriber(identifier string) {
+	em.mu.Lock()
+	defer em.mu.Unlock()
+	delete(em.subscribers, identifier)
+}
+
+func (em *EventManager) GetSubscriber(identifier string) SubscriberInterface {
+	em.mu.RLock()
+	defer em.mu.RUnlock()
+	return em.subscribers[identifier]
 }
 
 // KeyEventManagerLogger is ßthe key of the event manager logger in the context.

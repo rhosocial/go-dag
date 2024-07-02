@@ -50,6 +50,11 @@ func TestEventManager(t *testing.T) {
 			t.Fatalf("Error creating eventManager: %v", err)
 		}
 
+		subscriber_ := em.GetSubscriber("mock_subscriber")
+		if subscriber_ == nil {
+			t.Fatal("subscriber is nil")
+		}
+
 		go em.Listen()
 
 		// Get logger
@@ -89,7 +94,7 @@ func TestEventManager(t *testing.T) {
 		}
 
 		// Remove subscriber from eventManager
-		delete(em.subscribers, "mock_subscriber")
+		em.RemoveSubscriber("mock_subscriber")
 
 		// Publish another event after removing subscriber
 		logger.Log(&MockEvent{Message: "Test event 2"})
@@ -153,7 +158,7 @@ func TestEventManager(t *testing.T) {
 		}
 
 		// Remove subscriber from eventManager
-		delete(em.subscribers, "mock_subscriber")
+		em.RemoveSubscriber("mock_subscriber")
 
 		// Publish another event after removing subscriber
 		logger.Log(&MockEvent{Message: "Test event 2"})
