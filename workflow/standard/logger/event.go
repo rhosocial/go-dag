@@ -33,6 +33,7 @@ type EventManagerInterface interface {
 	GetLogger() Interface
 }
 
+// EventManagerSubscriberInterface represents an interface for managing subscribers.
 type EventManagerSubscriberInterface interface {
 	AddSubscriber(identifier string, subscriber SubscriberInterface)
 	RemoveSubscriber(identifier string)
@@ -151,18 +152,27 @@ func (em *EventManager) GetLogger() Interface {
 	return em.logger
 }
 
+// AddSubscriber adds a subscriber with specified identifier.
+//
+// If the specified subscriber exists, it is replaced.
 func (em *EventManager) AddSubscriber(identifier string, subscriber SubscriberInterface) {
 	em.mu.Lock()
 	defer em.mu.Unlock()
 	em.subscribers[identifier] = subscriber
 }
 
+// RemoveSubscriber removes a subscriber with specified identifier.
+//
+// If the specified subscriber does not exist, nothing happens.
 func (em *EventManager) RemoveSubscriber(identifier string) {
 	em.mu.Lock()
 	defer em.mu.Unlock()
 	delete(em.subscribers, identifier)
 }
 
+// GetSubscriber gets a subscriber with specified identifier.
+//
+// If the specified subscriber does not exist, nil will be given.
 func (em *EventManager) GetSubscriber(identifier string) SubscriberInterface {
 	em.mu.RLock()
 	defer em.mu.RUnlock()
