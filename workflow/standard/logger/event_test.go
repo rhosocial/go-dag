@@ -7,6 +7,7 @@ package logger
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,11 +22,20 @@ type MockEvent struct {
 // MockSubscriber represents a mock subscriber for testing purposes.
 type MockSubscriber struct {
 	ReceivedEvents []EventInterface
+	mu             sync.RWMutex
 }
 
 // ReceiveEvent implements the ReceiveEvent method of SubscriberInterface.
 func (s *MockSubscriber) ReceiveEvent(event EventInterface) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.ReceivedEvents = append(s.ReceivedEvents, event)
+}
+
+func (s *MockSubscriber) GetReceivedEvents() []EventInterface {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.ReceivedEvents
 }
 
 func TestEventManager(t *testing.T) {
@@ -66,12 +76,13 @@ func TestEventManager(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 
 		// Check if the subscriber received the event
-		if len(subscriber.ReceivedEvents) != 1 {
-			t.Fatalf("Expected 1 received event, got %d", len(subscriber.ReceivedEvents))
+		events := subscriber.GetReceivedEvents()
+		if len(events) != 1 {
+			t.Fatalf("Expected 1 received event, got %d", len(events))
 		}
 
 		// Check the content of the received event
-		receivedEvent := subscriber.ReceivedEvents[0].(*MockEvent)
+		receivedEvent := events[0].(*MockEvent)
 		expectedMessage := "Test event"
 		if receivedEvent.Message != expectedMessage {
 			t.Fatalf("Expected event message '%s', got '%s'", expectedMessage, receivedEvent.Message)
@@ -87,8 +98,8 @@ func TestEventManager(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 
 		// Ensure that subscriber did not receive the second event
-		if len(subscriber.ReceivedEvents) != 1 {
-			t.Fatalf("Expected 1 received event, got %d", len(subscriber.ReceivedEvents))
+		if len(events) != 1 {
+			t.Fatalf("Expected 1 received event, got %d", len(events))
 		}
 
 		cancelBg()
@@ -129,12 +140,13 @@ func TestEventManager(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 
 		// Check if the subscriber received the event
-		if len(subscriber.ReceivedEvents) != 1 {
-			t.Fatalf("Expected 1 received event, got %d", len(subscriber.ReceivedEvents))
+		events := subscriber.GetReceivedEvents()
+		if len(events) != 1 {
+			t.Fatalf("Expected 1 received event, got %d", len(events))
 		}
 
 		// Check the content of the received event
-		receivedEvent := subscriber.ReceivedEvents[0].(*MockEvent)
+		receivedEvent := events[0].(*MockEvent)
 		expectedMessage := "Test event"
 		if receivedEvent.Message != expectedMessage {
 			t.Fatalf("Expected event message '%s', got '%s'", expectedMessage, receivedEvent.Message)
@@ -150,8 +162,8 @@ func TestEventManager(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 
 		// Ensure that subscriber did not receive the second event
-		if len(subscriber.ReceivedEvents) != 1 {
-			t.Fatalf("Expected 1 received event, got %d", len(subscriber.ReceivedEvents))
+		if len(events) != 1 {
+			t.Fatalf("Expected 1 received event, got %d", len(events))
 		}
 
 		cancelBg()
