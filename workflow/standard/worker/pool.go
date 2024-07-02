@@ -114,11 +114,13 @@ func WithWorkerMetrics(metrics MetricsProvider) Option {
 }
 
 // WithEventManager sets the event manager.
-func WithEventManager(eventManager logger.EventManagerInterface, ctx context.Context) Option {
+//
+//   - eventManager: the event manager to be set.
+func WithEventManager(eventManager logger.EventManagerInterface) Option {
 	return func(p *pool) {
 		p.eventManager = eventManager
 		if p.eventManager != nil {
-			go p.eventManager.Listen(ctx)
+			go p.eventManager.Listen()
 		}
 	}
 }

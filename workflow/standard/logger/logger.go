@@ -22,11 +22,16 @@ type Logger struct {
 }
 
 // Log records the event.
+//
+// Note that you must first ensure that the corresponding event collector has enabled listening.
+// Otherwise, calling this method will be blocked.
 func (l *Logger) Log(event EventInterface) {
 	l.eventChannel <- event
 }
 
 // NewLogger instantiates a new logger.
+//
+//   - eventChannel: the destination to which the event is sent.
 func NewLogger(eventChannel chan EventInterface) Interface {
 	return &Logger{
 		eventChannel: eventChannel,

@@ -29,68 +29,133 @@ func (s *MockSubscriber) ReceiveEvent(event EventInterface) {
 }
 
 func TestEventManager(t *testing.T) {
-	// Create mock subscriber
-	subscriber := &MockSubscriber{}
+	t.Run("normal", func(t *testing.T) {
+		// Create mock subscriber
+		subscriber := &MockSubscriber{}
 
-	// Create a new eventManager with a subscriber
-	em, err := NewEventManager(WithSubscriber("mock_subscriber", subscriber))
-	if err != nil {
-		t.Fatalf("Error creating eventManager: %v", err)
-	}
+		// Create a new eventManager with a subscriber
+		ctxBg, cancelBg := context.WithCancel(context.Background())
+		em, err := NewEventManager(WithSubscriber("mock_subscriber", subscriber), WithListeningContext(ctxBg))
+		if err != nil {
+			t.Fatalf("Error creating eventManager: %v", err)
+		}
 
-	ctxBg, cancelBg := context.WithCancel(context.Background())
-	go em.Listen(ctxBg)
+		go em.Listen()
 
-	// Get logger
-	logger := em.GetLogger()
-	if logger == nil {
-		t.Fatalf("logger is nil")
-	}
+		// Get logger
+		logger := em.GetLogger()
+		if logger == nil {
+			t.Fatalf("logger is nil")
+		}
 
-	if logger_ := GetLoggerFromWorkerContext(context.Background()); logger_ != nil {
-		t.Fatalf("logger is not nil")
-	}
+		if logger_ := GetLoggerFromWorkerContext(context.Background()); logger_ != nil {
+			t.Fatalf("logger is not nil")
+		}
 
-	// Create a context with logger
-	ctx := WorkerContextWithLogger(context.Background(), em.GetLogger())
-	if logger_ := GetLoggerFromWorkerContext(ctx); logger_ == nil {
-		t.Fatalf("logger is nil")
-	}
+		// Create a context with logger
+		ctx := WorkerContextWithLogger(context.Background(), em.GetLogger())
+		if logger_ := GetLoggerFromWorkerContext(ctx); logger_ == nil {
+			t.Fatalf("logger is nil")
+		}
 
-	// Publish an event
-	event := &MockEvent{Message: "Test event"}
-	logger.Log(event)
+		// Publish an event
+		event := &MockEvent{Message: "Test event"}
+		logger.Log(event)
 
-	// Wait for a short time to ensure event processing
-	time.Sleep(100 * time.Millisecond)
+		// Wait for a short time to ensure event processing
+		time.Sleep(100 * time.Millisecond)
 
-	// Check if the subscriber received the event
-	if len(subscriber.ReceivedEvents) != 1 {
-		t.Fatalf("Expected 1 received event, got %d", len(subscriber.ReceivedEvents))
-	}
+		// Check if the subscriber received the event
+		if len(subscriber.ReceivedEvents) != 1 {
+			t.Fatalf("Expected 1 received event, got %d", len(subscriber.ReceivedEvents))
+		}
 
-	// Check the content of the received event
-	receivedEvent := subscriber.ReceivedEvents[0].(*MockEvent)
-	expectedMessage := "Test event"
-	if receivedEvent.Message != expectedMessage {
-		t.Fatalf("Expected event message '%s', got '%s'", expectedMessage, receivedEvent.Message)
-	}
+		// Check the content of the received event
+		receivedEvent := subscriber.ReceivedEvents[0].(*MockEvent)
+		expectedMessage := "Test event"
+		if receivedEvent.Message != expectedMessage {
+			t.Fatalf("Expected event message '%s', got '%s'", expectedMessage, receivedEvent.Message)
+		}
 
-	// Remove subscriber from eventManager
-	delete(em.subscribers, "mock_subscriber")
+		// Remove subscriber from eventManager
+		delete(em.subscribers, "mock_subscriber")
 
-	// Publish another event after removing subscriber
-	logger.Log(&MockEvent{Message: "Test event 2"})
+		// Publish another event after removing subscriber
+		logger.Log(&MockEvent{Message: "Test event 2"})
 
-	// Wait for a short time to ensure event processing
-	time.Sleep(100 * time.Millisecond)
+		// Wait for a short time to ensure event processing
+		time.Sleep(100 * time.Millisecond)
 
-	// Ensure that subscriber did not receive the second event
-	if len(subscriber.ReceivedEvents) != 1 {
-		t.Fatalf("Expected 1 received event, got %d", len(subscriber.ReceivedEvents))
-	}
+		// Ensure that subscriber did not receive the second event
+		if len(subscriber.ReceivedEvents) != 1 {
+			t.Fatalf("Expected 1 received event, got %d", len(subscriber.ReceivedEvents))
+		}
 
-	cancelBg()
+		cancelBg()
+	})
+	t.Run("nil context", func(t *testing.T) {
+		// Create mock subscriber
+		subscriber := &MockSubscriber{}
+
+		// Create a new eventManager with a subscriber
+		ctxBg, cancelBg := context.WithCancel(context.Background())
+		em, err := NewEventManager(WithSubscriber("mock_subscriber", subscriber))
+		if err != nil {
+			t.Fatalf("Error creating eventManager: %v", err)
+		}
+
+		go em.Listen()
+
+		// Get logger
+		logger := em.GetLogger()
+		if logger == nil {
+			t.Fatalf("logger is nil")
+		}
+		if logger_ := GetLoggerFromWorkerContext(ctxBg); logger_ != nil {
+			t.Fatalf("logger is not nil")
+		}
+
+		// Create a context with logger
+		ctx := WorkerContextWithLogger(context.Background(), em.GetLogger())
+		if logger_ := GetLoggerFromWorkerContext(ctx); logger_ == nil {
+			t.Fatalf("logger is nil")
+		}
+
+		// Publish an event
+		event := &MockEvent{Message: "Test event"}
+		logger.Log(event)
+
+		// Wait for a short time to ensure event processing
+		time.Sleep(100 * time.Millisecond)
+
+		// Check if the subscriber received the event
+		if len(subscriber.ReceivedEvents) != 1 {
+			t.Fatalf("Expected 1 received event, got %d", len(subscriber.ReceivedEvents))
+		}
+
+		// Check the content of the received event
+		receivedEvent := subscriber.ReceivedEvents[0].(*MockEvent)
+		expectedMessage := "Test event"
+		if receivedEvent.Message != expectedMessage {
+			t.Fatalf("Expected event message '%s', got '%s'", expectedMessage, receivedEvent.Message)
+		}
+
+		// Remove subscriber from eventManager
+		delete(em.subscribers, "mock_subscriber")
+
+		// Publish another event after removing subscriber
+		logger.Log(&MockEvent{Message: "Test event 2"})
+
+		// Wait for a short time to ensure event processing
+		time.Sleep(100 * time.Millisecond)
+
+		// Ensure that subscriber did not receive the second event
+		if len(subscriber.ReceivedEvents) != 1 {
+			t.Fatalf("Expected 1 received event, got %d", len(subscriber.ReceivedEvents))
+		}
+
+		cancelBg()
+	})
 }
 
 func WithSubscriberError() EventManagerOption {

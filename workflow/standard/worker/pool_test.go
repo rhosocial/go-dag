@@ -569,8 +569,8 @@ func TestPanicRecovery(t *testing.T) {
 }
 
 func TestWithEventManager(t *testing.T) {
-	eventManager, _ := logger.NewEventManager()
 	ctx, cancel := context.WithCancelCause(context.Background())
-	_ = NewPool(WithEventManager(eventManager, ctx), WithMaxWorkers(1))
+	eventManager, _ := logger.NewEventManager(logger.WithListeningContext(ctx))
+	_ = NewPool(WithEventManager(eventManager), WithMaxWorkers(1))
 	cancel(errors.New("test finished"))
 }

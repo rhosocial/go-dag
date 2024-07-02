@@ -70,7 +70,7 @@ type MockEventManager struct {
 	logger.EventManagerInterface
 }
 
-func (o MockEventManager) Listen(ctx context.Context) {}
+func (o MockEventManager) Listen() {}
 
 func (o MockEventManager) GetLogger() logger.Interface { return nil }
 
