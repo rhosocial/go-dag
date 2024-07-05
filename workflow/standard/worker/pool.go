@@ -11,8 +11,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/rhosocial/go-dag/workflow/standard/logger"
 	"sync"
+
+	"github.com/rhosocial/go-dag/workflow/standard/logger"
 )
 
 // Task is the interface that all tasks need to implement.
@@ -529,6 +530,7 @@ func (p *pool) handleMetricsUpdates() {
 	}
 }
 
+// Log records the event.
 func (p *pool) Log(event logger.EventInterface) {
 	if p.eventManager == nil || p.eventManager.GetLogger() == nil {
 		return
