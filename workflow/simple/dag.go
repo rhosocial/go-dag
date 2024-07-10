@@ -69,10 +69,18 @@ type WorkflowInterface[TInput, TOutput any] interface {
 	// the last execution ends. That is, pipelined execution is not supported.
 	// If you want to execute multiple times simultaneously without blocking,
 	// you should newly instantiate multiple Workflow instances and execute them separately.
+	//   - ctx: The context of this execution.
+	//          Note that if the current execution has not ended, when the method is called again,
+	//          the parameter will replace the parameter of the previous execution.
+	//          Therefore, it is strongly not recommended to call the method again
+	//          when the previous execution has not ended, unless the parameter does not actually work.
+	//   - input: The pointer to the input for the execution.
 	Execute(ctx context.Context, input *TInput) *TOutput
 
 	// RunOnce executes the workflow only once. All channelInputs are closed after execution.
 	// If you want to re-execute, you need to re-create the workflow instance. (call NewWorkflow)
+	//   - ctx: The context of this execution.
+	//   - input: The pointer to the input for the execution.
 	RunOnce(ctx context.Context, input *TInput) *TOutput
 
 	// Cancel an executing workflow. If there are no workflows executing, there will be no impact.
