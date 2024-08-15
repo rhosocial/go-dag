@@ -1,0 +1,40 @@
+version: "3.8"
+services:
+  redis:
+    image: redis:7
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
+    ports:
+      - "6379:6379"
+    networks:
+      - dev
+    volumes:
+      - redis_data:/data
+  mysql:
+    image: mysql:8
+    environment:
+      MYSQL_ROOT_PASSWORD: 12345678
+      MYSQL_USER: user
+      MYSQL_PASSWORD: 12345678
+      MYSQL_DATABASE: go-dag
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
+    ports:
+      - "3306:3306"
+    networks:
+      - dev
+    volumes:
+      - mysql_data:/var/lib/mysql
+networks:
+  dev:
+volumes:
+  redis_data:
+  mysql_data:
