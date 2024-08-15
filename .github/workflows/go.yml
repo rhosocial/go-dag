@@ -16,7 +16,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Build and start containers
-        run: docker-compose -f tests/environments/go1.20_redis7_mysql8/docker-compose.yml up -d --build && docker ps
+        run: docker compose -f tests/environments/go1.20_redis7_mysql8/docker-compose.yml up -d --build && docker ps
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -41,14 +41,14 @@ jobs:
 
       - name: Stop containers
         if: always()
-        run: docker-compose -f tests/environments/go1.20_redis7_mysql8/docker-compose.yml down
+        run: docker compose -f tests/environments/go1.20_redis7_mysql8/docker-compose.yml down
   go21_redis7_mysql8:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Build and start containers
-        run: docker-compose -f tests/environments/go1.21_redis7_mysql8/docker-compose.yml up -d --build && docker ps
+        run: docker compose -f tests/environments/go1.21_redis7_mysql8/docker-compose.yml up -d --build && docker ps
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -64,14 +64,14 @@ jobs:
         run: go test -race -v ./... -bench . -run ^$ -count 10 -benchmem
       - name: Stop containers
         if: always()
-        run: docker-compose -f tests/environments/go1.21_redis7_mysql8/docker-compose.yml down
+        run: docker compose -f tests/environments/go1.21_redis7_mysql8/docker-compose.yml down
   go22_redis7_mysql8:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Build and start containers
-        run: docker-compose -f tests/environments/go1.22_redis7_mysql8/docker-compose.yml up -d --build && docker ps
+        run: docker compose -f tests/environments/go1.22_redis7_mysql8/docker-compose.yml up -d --build && docker ps
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -87,14 +87,14 @@ jobs:
         run: go test -race -v ./... -bench . -run ^$ -count 10 -benchmem
       - name: Stop containers
         if: always()
-        run: docker-compose -f tests/environments/go1.22_redis7_mysql8/docker-compose.yml down
+        run: docker compose -f tests/environments/go1.22_redis7_mysql8/docker-compose.yml down
   go23_redis7_mysql8:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Build and start containers
-        run: docker-compose -f tests/environments/go1.23_redis7_mysql8/docker-compose.yml up -d --build && docker ps
+        run: docker compose -f tests/environments/go1.23_redis7_mysql8/docker-compose.yml up -d --build && docker ps
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -110,4 +110,4 @@ jobs:
         run: go test -race -v ./... -bench . -run ^$ -count 10 -benchmem
       - name: Stop containers
         if: always()
-        run: docker-compose -f tests/environments/go1.23_redis7_mysql8/docker-compose.yml down
+        run: docker compose -f tests/environments/go1.23_redis7_mysql8/docker-compose.yml down
