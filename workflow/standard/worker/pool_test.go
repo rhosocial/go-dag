@@ -7,11 +7,11 @@ package worker
 import (
 	"context"
 	"errors"
-	"github.com/rhosocial/go-dag/workflow/standard/logger"
 	"log"
 	"testing"
 	"time"
 
+	"github.com/rhosocial/go-dag/workflow/standard/logger"
 	"github.com/stretchr/testify/assert"
 )
 
